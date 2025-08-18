@@ -157,9 +157,9 @@ public class SuggestionService {
             - Festivals/events → OTHER
             
             Price band rules (relative to user budget of %s SEK):
-            - LOW: < %s SEK
-            - MEDIUM: %s - %s SEK  
-            - HIGH: > %s SEK
+            - LOW: < %s SEK (up to 10%% of budget)
+            - MEDIUM: %s - %s SEK (10-40%% of budget)
+            - HIGH: > %s SEK (40%%+ of budget - BE BOLD!)
             
             Mode rules:
             - CREATIVE: Include surprising but feasible ideas
@@ -175,10 +175,15 @@ public class SuggestionService {
             BUDGET SCALING REQUIREMENTS:
             - For LOW budgets (< %s SEK): Focus on accessible local experiences, short trips, courses
             - For MEDIUM budgets (%s - %s SEK): Include European trips, longer adventures, premium experiences
-            - For HIGH budgets (> %s SEK): Suggest luxury travel, exclusive experiences, once-in-a-lifetime adventures
-            - High budget examples: Private yacht charters, luxury safari lodges, Michelin-starred culinary tours, 
-              private island rentals, helicopter tours of remote locations, exclusive cultural experiences
-            - Match the extravagance level to the budget - don't suggest budget options for wealthy users
+            - For HIGH budgets (> %s SEK): GO ABSOLUTELY WILD! Suggest ultra-luxury, exclusive, once-in-a-lifetime experiences
+            - High budget examples: Private space tourism (Virgin Galactic/Blue Origin), entire cruise ship charters, 
+              buying private islands for vacations, commissioning custom superyachts, private jet world tours with 
+              presidential suites, exclusive access to closed historical sites, hiring famous chefs for private dinners,
+              custom expedition to Antarctica or Everest base camps, renting entire luxury resorts, private concerts 
+              by famous artists, bespoke adventure experiences money can't usually buy
+            - For budgets over 1 million SEK: Suggest experiences costing 500K-2M+ SEK without hesitation
+            - For budgets over 3 million SEK: Dream bigger - suggest 1M-3M+ SEK experiences
+            - Match the extravagance level to the budget - wealthy users should get wealthy suggestions!
             
             BUDGET CALCULATION RULES:
             - estimatedCost must be realistic and match the priceBand
@@ -336,13 +341,13 @@ public class SuggestionService {
     
     private PriceBands calculateRelativePriceBands(BigDecimal totalBudget) {
         // Calculate relative price bands based on percentage of total budget
-        // LOW: 0-25% of budget
-        // MEDIUM: 25-75% of budget  
-        // HIGH: 75%+ of budget
+        // LOW: 0-10% of budget (for high budgets, this allows more room for medium/high)
+        // MEDIUM: 10-40% of budget  
+        // HIGH: 40%+ of budget (for truly expensive experiences)
         
-        BigDecimal lowThreshold = totalBudget.multiply(BigDecimal.valueOf(0.25));
+        BigDecimal lowThreshold = totalBudget.multiply(BigDecimal.valueOf(0.10));
         BigDecimal mediumLow = lowThreshold;
-        BigDecimal mediumHigh = totalBudget.multiply(BigDecimal.valueOf(0.75));
+        BigDecimal mediumHigh = totalBudget.multiply(BigDecimal.valueOf(0.40));
         BigDecimal highThreshold = mediumHigh;
         
         return new PriceBands(lowThreshold, mediumLow, mediumHigh, highThreshold);
