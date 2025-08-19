@@ -3,6 +3,7 @@ package com.bucketlist.domain;
 import com.bucketlist.api.SuggestionDto;
 import com.bucketlist.api.BudgetItem;
 import com.bucketlist.api.SuggestionFeedbackContext;
+import com.bucketlist.api.RejectedSuggestionDto;
 import com.bucketlist.infra.SuggestionFeedbackRepository;
 import com.bucketlist.infra.SuggestionRepository;
 import com.bucketlist.infra.UserProfileRepository;
@@ -104,9 +105,71 @@ public class SuggestionService {
             .map(SuggestionFeedback::getSuggestionId)
             .collect(Collectors.toSet());
         
-        return suggestionRepository.findAllById(suggestionIds).stream()
-            .map(s -> new SuggestionDto(s.getId(), s.getTitle(), s.getDescription(), 
-                     parseBudgetBreakdown(s.getBudgetBreakdownJson())))
+        var suggestions = suggestionRepository.findAllById(suggestionIds);
+        var suggestionMap = suggestions.stream()
+            .collect(Collectors.toMap(Suggestion::getId, s -> s));
+        
+        // Create feedback map for ordering by accepted date
+        var feedbackMap = acceptedFeedback.stream()
+            .collect(Collectors.toMap(SuggestionFeedback::getSuggestionId, f -> f));
+        
+        return suggestionIds.stream()
+            .map(id -> {
+                var suggestion = suggestionMap.get(id);
+                if (suggestion != null) {
+                    return new SuggestionDto(
+                        suggestion.getId(),
+                        suggestion.getTitle(),
+                        suggestion.getDescription(),
+                        parseBudgetBreakdown(suggestion.getBudgetBreakdownJson())
+                    );
+                }
+                return null;
+            })
+            .filter(Objects::nonNull)
+            .sorted((a, b) -> {
+                var feedbackA = feedbackMap.get(a.id());
+                var feedbackB = feedbackMap.get(b.id());
+                return feedbackB.getCreatedAt().compareTo(feedbackA.getCreatedAt()); // Most recent first
+            })
+            .collect(Collectors.toList());
+    }
+    
+    public List<RejectedSuggestionDto> getRejectedSuggestions(UUID profileId) {
+        log.debug("Getting rejected suggestions for profile {}", profileId);
+        
+        var rejectedFeedback = feedbackRepository.findByProfileIdAndVerdict(profileId, Verdict.REJECT);
+        
+        var suggestionIds = rejectedFeedback.stream()
+            .map(SuggestionFeedback::getSuggestionId)
+            .collect(Collectors.toSet());
+        
+        var suggestions = suggestionRepository.findAllById(suggestionIds);
+        var suggestionMap = suggestions.stream()
+            .collect(Collectors.toMap(Suggestion::getId, s -> s));
+        
+        // Create feedback map for quick lookup
+        var feedbackMap = rejectedFeedback.stream()
+            .collect(Collectors.toMap(SuggestionFeedback::getSuggestionId, f -> f));
+        
+        return suggestionIds.stream()
+            .map(id -> {
+                var suggestion = suggestionMap.get(id);
+                var feedback = feedbackMap.get(id);
+                if (suggestion != null && feedback != null) {
+                    return new RejectedSuggestionDto(
+                        suggestion.getId(),
+                        suggestion.getTitle(),
+                        suggestion.getDescription(),
+                        parseBudgetBreakdown(suggestion.getBudgetBreakdownJson()),
+                        feedback.getReason(),
+                        feedback.getCreatedAt()
+                    );
+                }
+                return null;
+            })
+            .filter(Objects::nonNull)
+            .sorted((a, b) -> b.rejectedAt().compareTo(a.rejectedAt())) // Most recent first
             .collect(Collectors.toList());
     }
     
@@ -148,10 +211,10 @@ public class SuggestionService {
     }
     
     private String buildSuggestionPrompt(UserProfile profile, SpendingCategory spendingCategory, SuggestionMode suggestionMode, int count, List<SuggestionFeedbackContext> feedbackHistory) {
-        var priceBands = calculateRelativePriceBands(profile.getCapital());
         String categoryFocus = buildCategoryFocus(spendingCategory);
         String modeInstructions = buildModeInstructions(suggestionMode);
         String feedbackContext = buildFeedbackContextPrompt(feedbackHistory);
+        String budgetGuidance = buildBudgetGuidance(profile.getCapital());
         
         return String.format("""
             Generate %d bucket list suggestions for this user profile:
@@ -164,6 +227,8 @@ public class SuggestionService {
             Personality: %s
             Preferences: %s
             Prior Experiences: %s
+            
+            %s
             
             %s
             
@@ -191,15 +256,6 @@ public class SuggestionService {
               }
             ]
             
-            BUDGET CALCULATION RULES:
-            - Create realistic budget breakdowns with appropriate cost ranges for the user's budget (%s SEK)
-            - Include relevant categories: Transport, Accommodation, Activities, Food, Equipment, Other, etc.
-            - For local activities, focus on Activities/Equipment costs
-            - For travel, include flights/transport from Sweden
-            - Scale suggestions to user's budget - higher budgets should get more luxurious/exclusive experiences
-            - Vary suggestion costs across the full spectrum: some affordable (< 10%% of budget), some moderate (10-40%%), some expensive (40%%+)
-            - Ensure budgetBreakdown amounts are realistic for each experience type
-            
             CRITICAL: Return only the JSON array, no other text.
             
             LANGUAGE REQUIREMENT: All suggestion titles and descriptions MUST be in English. Do not use Swedish or any other language.
@@ -207,10 +263,11 @@ public class SuggestionService {
             count, profile.getAge(), profile.getGender(), profile.getCapital(),
             profile.getPersonalityJson(), profile.getPreferencesJson(), profile.getPriorExperiencesJson(),
             feedbackContext,
+            budgetGuidance,
             spendingCategory.getDisplayName(), categoryFocus,
             suggestionMode.getDisplayName(), modeInstructions,
             spendingCategory.getDisplayName(),
-            count, profile.getCapital());
+            count);
     }
     
     private String buildFeedbackContextPrompt(List<SuggestionFeedbackContext> feedbackHistory) {
@@ -267,6 +324,55 @@ public class SuggestionService {
             """);
         
         return contextBuilder.toString();
+    }
+    
+    private String buildBudgetGuidance(BigDecimal capital) {
+        double capitalAmount = capital.doubleValue();
+        
+        if (capitalAmount < 50000) {
+            return """
+                BUDGET SCALING GUIDANCE (Low Budget: %s SEK):
+                - Focus on LOCAL and REGIONAL experiences primarily (80%% of suggestions)
+                - Occasional national experiences (20%% of suggestions)
+                - Base cost range: 1,000-15,000 SEK per suggestion
+                - Mix: 40%% low cost (1k-5k), 40%% moderate (5k-10k), 20%% higher (10k-15k)
+                - Examples: Weekend trips, local courses, equipment purchases, regional adventures
+                - Avoid international travel unless budget-friendly (hostels, low-cost airlines)
+                """.formatted(capital);
+        } else if (capitalAmount < 200000) {
+            return """
+                BUDGET SCALING GUIDANCE (Medium Budget: %s SEK):
+                - Mix of local (40%%), national (40%%), and international (20%%) experiences
+                - Base cost range: 5,000-60,000 SEK per suggestion
+                - Mix: 30%% moderate (5k-20k), 50%% higher (20k-40k), 20%% premium (40k-60k)
+                - Include some premium experiences to match budget capacity
+                - Examples: European trips, quality courses/certifications, premium equipment, week-long adventures
+                - Sprinkle in occasional luxury touches (business class, 4-star hotels)
+                """.formatted(capital);
+        } else if (capitalAmount < 500000) {
+            return """
+                BUDGET SCALING GUIDANCE (High Budget: %s SEK):
+                - Premium and luxury experiences should be the norm (60%% of suggestions)
+                - Global travel opportunities with quality accommodations
+                - Base cost range: 15,000-150,000 SEK per suggestion
+                - Mix: 20%% moderate (15k-40k), 50%% premium (40k-80k), 30%% luxury (80k-150k)
+                - Include exclusive experiences: private tours, luxury accommodations, first-class travel
+                - Examples: Luxury safaris, private yacht charters, exclusive resorts, high-end courses with celebrity instructors
+                - Don't be afraid to suggest expensive experiences - the user has the budget for them
+                """.formatted(capital);
+        } else {
+            return """
+                BUDGET SCALING GUIDANCE (Ultra-High Budget: %s SEK):
+                - Ultra-luxury and exclusive experiences should dominate (70%% of suggestions)
+                - Once-in-a-lifetime opportunities that money can barely buy
+                - Base cost range: 50,000-500,000+ SEK per suggestion
+                - Mix: 30%% premium (50k-100k), 40%% luxury (100k-200k), 30%% ultra-luxury (200k+)
+                - Think: Private islands, space tourism, custom superyacht experiences, private jets
+                - Examples: Antarctic expedition with private guide, custom Michelin-starred dining experiences, 
+                  exclusive access to historical sites, private concerts with famous artists
+                - The sky is the limit - suggest truly extraordinary experiences that justify the budget
+                """.formatted(capital);
+        }
     }
     
     private List<SuggestionDto> parseSuggestionsFromResponse(String response, UserProfile profile) {
@@ -371,68 +477,112 @@ public class SuggestionService {
         }
     }
     
-    private record PriceBands(
-        BigDecimal lowThreshold,
-        BigDecimal mediumLow,
-        BigDecimal mediumHigh,
-        BigDecimal highThreshold
-    ) {}
-    
-    private PriceBands calculateRelativePriceBands(BigDecimal totalBudget) {
-        // Calculate relative price bands based on percentage of total budget
-        // LOW: 0-10% of budget (for high budgets, this allows more room for medium/high)
-        // MEDIUM: 10-40% of budget  
-        // HIGH: 40%+ of budget (for truly expensive experiences)
-        
-        BigDecimal lowThreshold = totalBudget.multiply(BigDecimal.valueOf(0.10));
-        BigDecimal mediumLow = lowThreshold;
-        BigDecimal mediumHigh = totalBudget.multiply(BigDecimal.valueOf(0.40));
-        BigDecimal highThreshold = mediumHigh;
-        
-        return new PriceBands(lowThreshold, mediumLow, mediumHigh, highThreshold);
-    }
     
     private String buildCategoryFocus(SpendingCategory category) {
         return switch (category) {
             case TRAVEL_VACATION -> """
-                Focus on travel destinations, vacation experiences, hotels, resorts, flights, and tourism.
-                Include both international destinations and unique travel experiences within Sweden.
-                Emphasize journeys, cultural immersion, and vacation memories.""";
+                Focus EXCLUSIVELY on travel destinations, vacation experiences, accommodations, transportation, and tourism activities.
+                
+                MUST INCLUDE examples like:
+                - International destinations: Japan cultural tour, African safari, European city breaks, Maldives resort stay
+                - Domestic travel: Swedish Lapland northern lights, Gothenburg archipelago island hopping, Skåne countryside retreat
+                - Adventure travel: Patagonia hiking expedition, Iceland volcano tour, Nepal mountain trekking
+                - Luxury travel: Orient Express journey, private island resort, luxury cruise experiences
+                - Cultural travel: Art tours in Italy, wine regions of France, historical sites in Egypt
+                
+                DO NOT include: Shopping, permanent purchases, courses unrelated to travel, local activities that aren't vacation-focused.
+                EMPHASIZE: Transportation, accommodations, guided tours, vacation activities, cultural immersion.""";
             
             case LUXURY_THINGS -> """
-                Focus on high-end products, luxury goods, premium services, and exclusive experiences.
-                Include luxury cars, watches, jewelry, designer items, premium memberships, and elite services.
-                Emphasize quality, exclusivity, and status symbols.""";
+                Focus EXCLUSIVELY on high-end products, luxury goods, premium services, and exclusive material possessions.
+                
+                MUST INCLUDE examples like:
+                - Luxury vehicles: Ferrari sports car, custom yacht, private jet shares, vintage classic car
+                - High-end jewelry: Rolex watch, diamond jewelry, custom-made pieces, designer collections
+                - Premium fashion: Hermès handbags, bespoke suits, designer shoe collections, luxury wardrobe
+                - Exclusive services: Private chef, personal stylist, luxury concierge membership, VIP access passes
+                - Art & collectibles: Original artwork, rare collectibles, custom furniture, luxury home items
+                
+                DO NOT include: Experiences, travel, services without tangible luxury goods.
+                EMPHASIZE: Quality, exclusivity, craftsmanship, status symbols, permanent acquisitions.""";
             
             case HEALTH_WELLNESS -> """
-                Focus on physical health, mental wellbeing, fitness, nutrition, and self-care.
-                Include spa treatments, medical procedures, fitness programs, wellness retreats, and health coaching.
-                Emphasize improving quality of life and personal wellbeing.""";
+                Focus EXCLUSIVELY on physical health, mental wellbeing, fitness, medical care, and body/mind optimization.
+                
+                MUST INCLUDE examples like:
+                - Medical & dental: Advanced health screenings, cosmetic procedures, dental implants, preventive treatments
+                - Fitness & training: Personal trainer sessions, specialized equipment, gym memberships, sports coaching
+                - Spa & wellness: Luxury spa retreats, massage therapy programs, wellness resort stays, meditation retreats
+                - Nutrition & diet: Nutritionist consultations, organic meal plans, supplement programs, cooking classes
+                - Mental health: Therapy sessions, life coaching, stress management programs, mindfulness training
+                
+                DO NOT include: General lifestyle improvements, travel (unless specifically wellness-focused), luxury goods.
+                EMPHASIZE: Physical improvement, mental clarity, professional healthcare, wellness optimization.""";
             
             case SOCIAL_LIFESTYLE -> """
-                Focus on social activities, entertainment, lifestyle enhancements, and experiences with others.
-                Include parties, events, social clubs, networking, lifestyle upgrades, and community activities.
-                Emphasize social connections and lifestyle improvements.""";
+                Focus EXCLUSIVELY on social activities, entertainment, networking, and lifestyle enhancements involving others.
+                
+                MUST INCLUDE examples like:
+                - Social events: Private party hosting, exclusive club memberships, networking events, social gatherings
+                - Entertainment: Concert VIP packages, theater season tickets, exclusive event access, entertainment subscriptions
+                - Hobbies & clubs: Golf club membership, wine tasting societies, book clubs, hobby group participation
+                - Community activities: Charity event organization, community involvement, local group leadership
+                - Lifestyle upgrades: Home entertainment systems, social space improvements, hosting capabilities
+                
+                DO NOT include: Solo activities, pure travel, health services, individual luxury purchases.
+                EMPHASIZE: Social interaction, community building, shared experiences, entertainment, networking.""";
             
             case MENTAL_EMOTIONAL -> """
-                Focus on mental health, personal development, therapy, coaching, and emotional wellbeing.
-                Include meditation retreats, therapy sessions, personal coaching, mindfulness programs, and stress relief.
-                Emphasize inner peace, mental clarity, and emotional growth.""";
+                Focus EXCLUSIVELY on mental health, emotional development, personal growth, and psychological wellbeing.
+                
+                MUST INCLUDE examples like:
+                - Therapy & counseling: Individual therapy, couples counseling, family therapy, specialized treatment programs
+                - Personal development: Life coaching, leadership training, confidence building, communication skills
+                - Mindfulness & meditation: Meditation retreats, mindfulness courses, spiritual guidance, contemplative practices
+                - Emotional healing: Grief counseling, trauma therapy, emotional intelligence training, stress management
+                - Self-discovery: Personality assessments, self-reflection retreats, journaling programs, personal insight work
+                
+                DO NOT include: Physical health, material purchases, travel (unless specifically mental health focused).
+                EMPHASIZE: Inner growth, emotional intelligence, mental clarity, psychological healing, self-awareness.""";
             
             case SMALL_LUXURY -> """
-                Focus on affordable luxury treats, small indulgences, and everyday pleasures.
-                Include premium food, wine, small luxury items, comfort upgrades, and accessible treats.
-                Emphasize quality over quantity and everyday luxury moments.""";
+                Focus EXCLUSIVELY on affordable luxury treats, premium everyday items, and accessible indulgences.
+                
+                MUST INCLUDE examples like:
+                - Premium food & drink: Fine wine collections, artisanal coffee subscriptions, gourmet ingredient sets, premium tea
+                - Comfort upgrades: High-quality bedding, luxury bath products, premium skincare, comfort accessories
+                - Small luxury items: Quality leather goods, premium stationery, artisanal crafts, boutique purchases
+                - Daily indulgences: Premium chocolate subscriptions, spa day packages, massage sessions, beauty treatments
+                - Quality upgrades: Better versions of everyday items, premium brands, enhanced daily experiences
+                
+                DO NOT include: Major purchases, expensive travel, large luxury goods, significant investments.
+                EMPHASIZE: Daily pleasures, quality over quantity, accessible luxury, everyday improvements.""";
             
             case FREEDOM_COMFORT -> """
-                Focus on experiences and purchases that provide freedom, comfort, and convenience.
-                Include time-saving services, comfort improvements, freedom from obligations, and peace of mind.
-                Emphasize reducing stress and increasing personal freedom.""";
+                Focus EXCLUSIVELY on purchases and services that increase personal freedom, reduce obligations, and enhance comfort.
+                
+                MUST INCLUDE examples like:
+                - Time-saving services: House cleaning, meal delivery, personal assistant, maintenance services
+                - Comfort improvements: Ergonomic furniture, climate control, comfort technology, relaxation equipment
+                - Freedom purchases: Debt elimination, financial planning, automated systems, convenience solutions
+                - Stress reduction: Organization services, simplification consulting, workflow optimization, peace-of-mind services
+                - Convenience upgrades: Smart home technology, transportation solutions, efficiency improvements
+                
+                DO NOT include: Entertainment, social activities, luxury goods for status, travel experiences.
+                EMPHASIZE: Time freedom, reduced stress, increased convenience, personal comfort, life simplification.""";
             
             case OPTIONAL_ADDONS -> """
-                Focus on supplementary experiences, add-on services, upgrades, and extra features.
-                Include premium versions of existing things, service upgrades, bonus experiences, and enhancements.
-                Emphasize improving existing experiences rather than entirely new ones.""";
+                Focus EXCLUSIVELY on upgrades, enhancements, add-on services, and premium versions of existing experiences.
+                
+                MUST INCLUDE examples like:
+                - Service upgrades: First-class flights, premium hotel rooms, VIP experiences, enhanced memberships
+                - Product enhancements: Extended warranties, premium features, upgrade packages, additional accessories
+                - Experience add-ons: Private guides for trips, exclusive access, behind-the-scenes tours, enhanced packages
+                - Membership upgrades: Premium tiers, additional benefits, exclusive access levels, enhanced services
+                - Optional extras: Insurance upgrades, extended services, bonus features, supplementary experiences
+                
+                DO NOT include: Entirely new purchases, base-level experiences, standalone products without upgrade context.
+                EMPHASIZE: Enhancement of existing, premium versions, value-added services, upgrade opportunities.""";
         };
     }
     

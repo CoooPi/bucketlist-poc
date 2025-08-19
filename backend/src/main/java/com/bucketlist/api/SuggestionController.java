@@ -73,4 +73,12 @@ public class SuggestionController {
         List<SuggestionDto> accepted = suggestionService.getAcceptedSuggestions(profileId);
         return ResponseEntity.ok(accepted);
     }
+    
+    @GetMapping("/rejected")
+    public ResponseEntity<List<RejectedSuggestionDto>> getRejectedSuggestions(@RequestParam UUID profileId) {
+        log.info("Getting rejected suggestions for profile {}", profileId);
+        
+        List<RejectedSuggestionDto> rejected = suggestionService.getRejectedSuggestions(profileId);
+        return ResponseEntity.ok(rejected);
+    }
 }

@@ -24,6 +24,15 @@ export interface Suggestion {
   budgetBreakdown: BudgetItem[];
 }
 
+export interface RejectedSuggestion {
+  id: string;
+  title: string;
+  description: string;
+  budgetBreakdown: BudgetItem[];
+  reason?: string;
+  rejectedAt: string;
+}
+
 export interface BudgetItem {
   category: string;
   description: string;

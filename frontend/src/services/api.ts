@@ -1,4 +1,4 @@
-import type { CreateProfileRequest, CreateProfileResponse, Suggestion, FeedbackRequest } from '../types';
+import type { CreateProfileRequest, CreateProfileResponse, Suggestion, FeedbackRequest, RejectedSuggestion } from '../types';
 import type { SpendingCategory, SuggestionMode } from '../types/categories';
 
 const API_BASE = 'http://localhost:8080/api';
@@ -70,6 +70,16 @@ export const api = {
     
     if (!response.ok) {
       throw new Error(`Failed to get accepted suggestions: ${response.statusText}`);
+    }
+    
+    return response.json();
+  },
+
+  async getRejectedSuggestions(profileId: string): Promise<RejectedSuggestion[]> {
+    const response = await fetch(`${API_BASE}/suggestions/rejected?profileId=${profileId}`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to get rejected suggestions: ${response.statusText}`);
     }
     
     return response.json();

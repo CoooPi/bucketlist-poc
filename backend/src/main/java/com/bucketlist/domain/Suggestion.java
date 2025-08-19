@@ -31,9 +31,6 @@ public class Suggestion {
     @Column(length = 600, nullable = false)
     private String description;
     
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private PriceBand priceBand;
     
     
     @Column(length = 64)

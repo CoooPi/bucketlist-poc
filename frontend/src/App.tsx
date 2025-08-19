@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { OnboardingForm } from './components/OnboardingForm';
 import { CategorySelectionPage } from './components/CategorySelectionPage';
 import { SuggestionCard } from './components/SuggestionCard';
+import { BucketListCard } from './components/BucketListCard';
+import { RejectedSuggestionsCard } from './components/RejectedSuggestionsCard';
 import { Card, CardContent } from './components/ui/card';
 import { Button } from './components/ui/button';
 import { api } from './services/api';
@@ -16,9 +18,9 @@ function App() {
   const [selectedCategory, setSelectedCategory] = useState<SpendingCategory | null>(null);
   const [selectedMode, setSelectedMode] = useState<SuggestionMode | null>(null);
   const [currentSuggestion, setCurrentSuggestion] = useState<Suggestion | null>(null);
-  const [acceptedCount, setAcceptedCount] = useState(0);
   const [error, setError] = useState<string>('');
   const [loading, setLoading] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const handleCreateProfile = async (profileRequest: CreateProfileRequest) => {
     setLoading(true);
@@ -87,7 +89,7 @@ function App() {
         verdict: 'ACCEPT'
       });
       
-      setAcceptedCount(prev => prev + 1);
+      setRefreshTrigger(prev => prev + 1); // Trigger sidebar refresh
       await loadNextSuggestion(profile.profileId, selectedCategory, selectedMode);
       
     } catch (err) {
@@ -109,6 +111,7 @@ function App() {
         reason
       });
       
+      setRefreshTrigger(prev => prev + 1); // Trigger sidebar refresh
       await loadNextSuggestion(profile.profileId, selectedCategory, selectedMode);
       
     } catch (err) {
@@ -124,99 +127,106 @@ function App() {
     setSelectedCategory(null);
     setSelectedMode(null);
     setCurrentSuggestion(null);
-    setAcceptedCount(0);
     setError('');
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <div className="w-full max-w-2xl">
+    <div className="min-h-screen bg-background p-4">
+      {/* Non-suggestions states: center in screen */}
+      {(state === 'onboarding' || state === 'category-selection' || state === 'loading' || state === 'error') && (
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="w-full max-w-2xl">
+            <div className="flex justify-center">
+              {state === 'onboarding' && (
+                <OnboardingForm onSubmit={handleCreateProfile} loading={loading} />
+              )}
 
-        {/* Main Content */}
-        <div className="flex justify-center">
-          {state === 'onboarding' && (
-            <OnboardingForm onSubmit={handleCreateProfile} loading={loading} />
-          )}
+              {state === 'category-selection' && profile && (
+                <CategorySelectionPage 
+                  profileId={profile.profileId}
+                  onCategorySelect={handleCategorySelect}
+                />
+              )}
 
-          {state === 'category-selection' && profile && (
-            <CategorySelectionPage 
-              profileId={profile.profileId}
-              onCategorySelect={handleCategorySelect}
-            />
-          )}
+              {state === 'loading' && (
+                <Card className="w-full max-w-md">
+                  <CardContent className="flex flex-col items-center justify-center py-12">
+                    <div className="animate-spin rounded-full h-12 w-12 border-2 border-primary border-t-transparent mb-4"></div>
+                    <p className="text-muted-foreground">
+                      {profile ? 'Generating new suggestions...' : 'Generating personalized suggestions...'}
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
 
-          {state === 'loading' && (
-            <Card className="w-full max-w-md">
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <div className="animate-spin rounded-full h-12 w-12 border-2 border-primary border-t-transparent mb-4"></div>
-                <p className="text-muted-foreground">
-                  {profile ? 'Generating new suggestions...' : 'Generating personalized suggestions...'}
-                </p>
-              </CardContent>
-            </Card>
-          )}
-
-          {state === 'suggestions' && currentSuggestion && (
-            <div className="w-full max-w-md space-y-6">
-              {/* Progress Info */}
-              <Card>
-                <CardContent className="py-4">
-                  <div className="text-center space-y-2">
-                    {profile && (
-                      <p className="text-sm text-muted-foreground">
-                        {profile.profileSummary}
-                      </p>
-                    )}
-                    <div className="flex items-center justify-center gap-2">
-                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                      <span className="text-sm font-medium text-green-600">
-                        {acceptedCount} suggestions added
-                      </span>
+              {state === 'error' && (
+                <Card className="w-full max-w-md">
+                  <CardContent className="py-8">
+                    <div className="text-center space-y-4">
+                      <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-md">
+                        <p className="text-destructive font-medium">{error}</p>
+                      </div>
+                      <Button onClick={resetApp}>
+                        Try again
+                      </Button>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-              
-              {/* Suggestion Card */}
-              <SuggestionCard
-                suggestion={currentSuggestion}
-                userBudget={profile?.capital || 0}
-                onAccept={handleAccept}
-                onReject={handleReject}
-                loading={loading}
-              />
-              
-              {/* Reset Button */}
-              <div className="text-center">
-                <Button
-                  onClick={resetApp}
-                  variant="ghost"
-                  size="sm"
-                  className="text-muted-foreground hover:text-foreground"
-                >
-                  Start over
-                </Button>
-              </div>
+                  </CardContent>
+                </Card>
+              )}
             </div>
-          )}
+          </div>
+        </div>
+      )}
 
-          {state === 'error' && (
-            <Card className="w-full max-w-md">
-              <CardContent className="py-8">
-                <div className="text-center space-y-4">
-                  <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-md">
-                    <p className="text-destructive font-medium">{error}</p>
-                  </div>
-                  <Button onClick={resetApp}>
-                    Try again
+      {/* Suggestions state: three-column layout */}
+      {state === 'suggestions' && currentSuggestion && profile && (
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="w-full max-w-7xl flex items-center gap-6 px-4">
+            {/* Left Column: Rejected Suggestions */}
+            <div className="w-80 flex-shrink-0">
+              <RejectedSuggestionsCard
+                profileId={profile.profileId}
+                refreshTrigger={refreshTrigger}
+              />
+            </div>
+
+            {/* Center Column: Main Suggestion */}
+            <div className="flex-1 flex flex-col justify-center items-center">
+              <div className="w-full max-w-md space-y-6">
+                {/* Main Suggestion Card */}
+                <SuggestionCard
+                  suggestion={currentSuggestion}
+                  userBudget={profile.capital}
+                  onAccept={handleAccept}
+                  onReject={handleReject}
+                  loading={loading}
+                />
+                
+                {/* Reset Button */}
+                <div className="text-center">
+                  <Button
+                    onClick={resetApp}
+                    variant="ghost"
+                    size="sm"
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    Start over
                   </Button>
                 </div>
-              </CardContent>
-            </Card>
-          )}
+              </div>
+            </div>
+
+            {/* Right Column: Bucket List */}
+            <div className="w-80 flex-shrink-0">
+              <BucketListCard
+                profileId={profile.profileId}
+                userBudget={profile.capital}
+                refreshTrigger={refreshTrigger}
+              />
+            </div>
+          </div>
         </div>
-        
-      </div>
+      )}
     </div>
   );
 }
