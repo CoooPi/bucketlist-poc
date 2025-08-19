@@ -1,0 +1,142 @@
+> Task :compileJava
+> Task :processResources UP-TO-DATE
+> Task :classes
+> Task :resolveMainClassName
+
+> Task :bootRun
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.5.4)
+
+2025-08-19T16:08:06.729+02:00  INFO 99198 --- [bucketlist] [           main] com.bucketlist.BucketListApplication     : Starting BucketListApplication using Java 21.0.7 with PID 99198 (/Users/theo/Documents/lifetiming/bucketlist-prototype/backend/build/classes/java/main started by theo in /Users/theo/Documents/lifetiming/bucketlist-prototype/backend)
+2025-08-19T16:08:06.731+02:00 DEBUG 99198 --- [bucketlist] [           main] com.bucketlist.BucketListApplication     : Running with Spring Boot v3.5.4, Spring v6.2.9
+2025-08-19T16:08:06.732+02:00  INFO 99198 --- [bucketlist] [           main] com.bucketlist.BucketListApplication     : No active profile set, falling back to 1 default profile: "default"
+2025-08-19T16:08:07.483+02:00  INFO 99198 --- [bucketlist] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2025-08-19T16:08:07.668+02:00  INFO 99198 --- [bucketlist] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 176 ms. Found 3 JPA repository interfaces.
+2025-08-19T16:08:08.206+02:00  INFO 99198 --- [bucketlist] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8080 (http)
+2025-08-19T16:08:08.219+02:00  INFO 99198 --- [bucketlist] [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2025-08-19T16:08:08.219+02:00  INFO 99198 --- [bucketlist] [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.43]
+2025-08-19T16:08:08.263+02:00  INFO 99198 --- [bucketlist] [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2025-08-19T16:08:08.269+02:00  INFO 99198 --- [bucketlist] [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 1489 ms
+2025-08-19T16:08:08.402+02:00  INFO 99198 --- [bucketlist] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2025-08-19T16:08:08.454+02:00  INFO 99198 --- [bucketlist] [           main] org.hibernate.Version                    : HHH000412: Hibernate ORM core version 6.6.22.Final
+2025-08-19T16:08:08.498+02:00  INFO 99198 --- [bucketlist] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2025-08-19T16:08:08.781+02:00  INFO 99198 --- [bucketlist] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2025-08-19T16:08:08.802+02:00  INFO 99198 --- [bucketlist] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2025-08-19T16:08:08.992+02:00  INFO 99198 --- [bucketlist] [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection conn0: url=jdbc:h2:mem:bucketlist user=SA
+2025-08-19T16:08:08.995+02:00  INFO 99198 --- [bucketlist] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2025-08-19T16:08:09.048+02:00  INFO 99198 --- [bucketlist] [           main] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+	Database JDBC URL [Connecting through datasource 'HikariDataSource (HikariPool-1)']
+	Database driver: undefined/unknown
+	Database version: 2.3.232
+	Autocommit mode: undefined/unknown
+	Isolation level: undefined/unknown
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2025-08-19T16:08:09.736+02:00  INFO 99198 --- [bucketlist] [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2025-08-19T16:08:09.766+02:00  INFO 99198 --- [bucketlist] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2025-08-19T16:08:10.244+02:00  INFO 99198 --- [bucketlist] [           main] o.s.d.j.r.query.QueryEnhancerFactory     : Hibernate is in classpath; If applicable, HQL parser will be used.
+2025-08-19T16:08:10.727+02:00  WARN 99198 --- [bucketlist] [           main] JpaBaseConfiguration$JpaWebConfiguration : spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+2025-08-19T16:08:10.927+02:00  INFO 99198 --- [bucketlist] [           main] o.s.b.a.h2.H2ConsoleAutoConfiguration    : H2 console available at '/h2-console'. Database available at 'jdbc:h2:mem:bucketlist'
+2025-08-19T16:08:10.969+02:00  INFO 99198 --- [bucketlist] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8080 (http) with context path '/'
+2025-08-19T16:08:10.976+02:00  INFO 99198 --- [bucketlist] [           main] com.bucketlist.BucketListApplication     : Started BucketListApplication in 4.599 seconds (process running for 4.868)
+2025-08-19T16:08:11.543+02:00  INFO 99198 --- [bucketlist] [nio-8080-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2025-08-19T16:08:11.543+02:00  INFO 99198 --- [bucketlist] [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2025-08-19T16:08:11.544+02:00  INFO 99198 --- [bucketlist] [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 1 ms
+2025-08-19T16:08:24.457+02:00  INFO 99198 --- [bucketlist] [nio-8080-exec-3] com.bucketlist.domain.ProfileService     : Creating profile for user: age=25, gender=MALE, capital=50000
+2025-08-19T16:08:30.870+02:00 DEBUG 99198 --- [bucketlist] [nio-8080-exec-3] com.bucketlist.domain.ProfileService     : Generated enhanced profile: {
+  "personality": {
+    "openness": "medium",
+    "extraversion": "high",
+    "riskTolerance": "medium"
+  },
+  "preferences": {
+    "themes": ["outdoors", "culture", "food", "sports"],
+    "travelStyle": "mid",
+    "timeWindows": ["weekend", "1-week"]
+  },
+  "priorExperiences": [
+    {"title": "Hiking in the Swedish Lapland", "category": "Adventure", "year": 2022},
+    {"title": "Attended a local food festival in Malmö", "category": "Food", "year": 2023},
+    {"title": "Took a weekend trip to Stockholm's museums", "category": "Culture", "year": 2023}
+  ],
+  "summary": "A 25-year-old male who enjoys outdoor adventures and cultural experiences. He is outgoing and has a balanced approach to risk, making him eager to explore both local and international destinations."
+}
+2025-08-19T16:08:30.936+02:00  INFO 99198 --- [bucketlist] [nio-8080-exec-3] com.bucketlist.domain.ProfileService     : Profile created with ID: ee58de49-302b-43fa-bc73-33dec8eca06c
+2025-08-19T16:08:38.703+02:00  INFO 99198 --- [bucketlist] [nio-8080-exec-4] c.bucketlist.api.SuggestionController    : Getting next suggestion for profile ee58de49-302b-43fa-bc73-33dec8eca06c with category MENTAL_EMOTIONAL, mode CREATIVE
+2025-08-19T16:08:38.779+02:00  INFO 99198 --- [bucketlist] [nio-8080-exec-4] c.bucketlist.domain.SuggestionService    : Generating 5 suggestions for profile ee58de49-302b-43fa-bc73-33dec8eca06c with category MENTAL_EMOTIONAL and mode CREATIVE
+2025-08-19T16:08:58.177+02:00 DEBUG 99198 --- [bucketlist] [nio-8080-exec-4] c.bucketlist.domain.SuggestionService    : AI response: [
+  {
+    "title": "Forest Meditation Retreat in Småland",
+    "description": "Spend a weekend in a secluded forest retreat, practicing guided meditation and mindfulness amidst nature's tranquility. Experience workshops on emotional growth and stress relief.",
+    "priceBand": "MEDIUM",
+    "budgetBreakdown": [
+      {"category": "Transport", "description": "Train to Småland", "amount": 1500},
+      {"category": "Accommodation", "description": "2 nights in a cozy cabin", "amount": 3000},
+      {"category": "Activities", "description": "Meditation sessions and workshops", "amount": 2500},
+      {"category": "Food", "description": "Healthy meals included", "amount": 1000}
+    ]
+  },
+  {
+    "title": "Art Therapy Weekend in Gothenburg",
+    "description": "Join a weekend art therapy workshop where you explore your emotions through creative expression. Unleash your inner artist while gaining insights into your mental wellbeing.",
+    "priceBand": "MEDIUM",
+    "budgetBreakdown": [
+      {"category": "Transport", "description": "Bus to Gothenburg", "amount": 800},
+      {"category": "Accommodation", "description": "2 nights in a city hotel", "amount": 4000},
+      {"category": "Activities", "description": "Art therapy sessions", "amount": 3000},
+      {"category": "Food", "description": "Cafés and local dining", "amount": 1200}
+    ]
+  },
+  {
+    "title": "Mindfulness and Hiking in Åre",
+    "description": "Combine your love for the outdoors with mindfulness practices on a guided hiking trip in Åre. Discover techniques to enhance inner peace while enjoying breathtaking views.",
+    "priceBand": "MEDIUM",
+    "budgetBreakdown": [
+      {"category": "Transport", "description": "Bus to Åre", "amount": 1000},
+      {"category": "Accommodation", "description": "2 nights in a mountain lodge", "amount": 3500},
+      {"category": "Activities", "description": "Guided hikes and mindfulness sessions", "amount": 2500},
+      {"category": "Food", "description": "Meals with local produce", "amount": 1000}
+    ]
+  },
+  {
+    "title": "Custom Coaching Experience in Stockholm",
+    "description": "Engage in a tailored personal coaching program focusing on emotional wellbeing. Work one-on-one with a professional coach in a serene environment for deep insights.",
+    "priceBand": "HIGH",
+    "budgetBreakdown": [
+      {"category": "Transport", "description": "Local transport in Stockholm", "amount": 600},
+      {"category": "Accommodation", "description": "2 nights in a luxury hotel", "amount": 8000},
+      {"category": "Activities", "description": "Personal coaching sessions", "amount": 10000},
+      {"category": "Food", "description": "Fine dining experiences", "amount": 3000}
+    ]
+  },
+  {
+    "title": "Culinary Mindfulness Retreat in Öland",
+    "description": "Discover the art of mindful cooking at a unique culinary retreat. Learn how to prepare meals that nourish the soul while practicing mindfulness techniques.",
+    "priceBand": "HIGH",
+    "budgetBreakdown": [
+      {"category": "Transport", "description": "Ferry and local transport to Öland", "amount": 2000},
+      {"category": "Accommodation", "description": "3 nights in a gourmet resort", "amount": 12000},
+      {"category": "Activities", "description": "Mindful cooking workshops", "amount": 8000},
+      {"category": "Food", "description": "Gourmet meals included", "amount": 3000}
+    ]
+  }
+]
+2025-08-19T16:09:25.973+02:00  INFO 99198 --- [bucketlist] [nio-8080-exec-6] c.bucketlist.api.SuggestionController    : Submitting feedback for suggestion 454934d2-ebf4-490c-88e4-50cb8d316adb from profile ee58de49-302b-43fa-bc73-33dec8eca06c
+2025-08-19T16:09:25.973+02:00  INFO 99198 --- [bucketlist] [nio-8080-exec-6] c.bucketlist.domain.SuggestionService    : Recording feedback: profile=ee58de49-302b-43fa-bc73-33dec8eca06c, suggestion=454934d2-ebf4-490c-88e4-50cb8d316adb, verdict=ACCEPT
+2025-08-19T16:09:25.981+02:00  INFO 99198 --- [bucketlist] [nio-8080-exec-7] c.bucketlist.api.SuggestionController    : Getting next suggestion for profile ee58de49-302b-43fa-bc73-33dec8eca06c with category MENTAL_EMOTIONAL, mode CREATIVE
+2025-08-19T16:09:31.687+02:00  INFO 99198 --- [bucketlist] [nio-8080-exec-8] c.bucketlist.api.SuggestionController    : Submitting feedback for suggestion ccf220a1-52cf-442d-a406-3958f251cadc from profile ee58de49-302b-43fa-bc73-33dec8eca06c
+2025-08-19T16:09:31.688+02:00  INFO 99198 --- [bucketlist] [nio-8080-exec-8] c.bucketlist.domain.SuggestionService    : Recording feedback: profile=ee58de49-302b-43fa-bc73-33dec8eca06c, suggestion=ccf220a1-52cf-442d-a406-3958f251cadc, verdict=REJECT
+2025-08-19T16:09:31.696+02:00  INFO 99198 --- [bucketlist] [nio-8080-exec-9] c.bucketlist.api.SuggestionController    : Getting next suggestion for profile ee58de49-302b-43fa-bc73-33dec8eca06c with category MENTAL_EMOTIONAL, mode CREATIVE
+2025-08-19T16:09:44.631+02:00  INFO 99198 --- [bucketlist] [io-8080-exec-10] c.bucketlist.api.SuggestionController    : Submitting feedback for suggestion c5c48a78-97b1-405a-9cab-9bc39b238d91 from profile ee58de49-302b-43fa-bc73-33dec8eca06c
+2025-08-19T16:09:44.631+02:00  INFO 99198 --- [bucketlist] [io-8080-exec-10] c.bucketlist.domain.SuggestionService    : Recording feedback: profile=ee58de49-302b-43fa-bc73-33dec8eca06c, suggestion=c5c48a78-97b1-405a-9cab-9bc39b238d91, verdict=ACCEPT
+2025-08-19T16:09:44.645+02:00  INFO 99198 --- [bucketlist] [nio-8080-exec-1] c.bucketlist.api.SuggestionController    : Getting next suggestion for profile ee58de49-302b-43fa-bc73-33dec8eca06c with category MENTAL_EMOTIONAL, mode CREATIVE
+2025-08-19T16:09:57.107+02:00  INFO 99198 --- [bucketlist] [nio-8080-exec-2] c.bucketlist.api.SuggestionController    : Submitting feedback for suggestion 5377d3f9-5180-4178-b119-437f40b92866 from profile ee58de49-302b-43fa-bc73-33dec8eca06c
+2025-08-19T16:09:57.107+02:00  INFO 99198 --- [bucketlist] [nio-8080-exec-2] c.bucketlist.domain.SuggestionService    : Recording feedback: profile=ee58de49-302b-43fa-bc73-33dec8eca06c, suggestion=5377d3f9-5180-4178-b119-437f40b92866, verdict=REJECT
+2025-08-19T16:09:57.115+02:00  INFO 99198 --- [bucketlist] [nio-8080-exec-3] c.bucketlist.api.SuggestionController    : Getting next suggestion for profile ee58de49-302b-43fa-bc73-33dec8eca06c with category MENTAL_EMOTIONAL, mode CREATIVE

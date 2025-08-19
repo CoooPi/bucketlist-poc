@@ -20,15 +20,14 @@ public class ProfileService {
     private final ObjectMapper objectMapper;
     
     public CreateProfileResponse createProfile(CreateProfileRequest request) {
-        log.info("Creating profile for user: age={}, gender={}, capital={}, mode={}", 
-                request.age(), request.gender(), request.capital(), request.mode());
+        log.info("Creating profile for user: age={}, gender={}, capital={}", 
+                request.age(), request.gender(), request.capital());
         
         // Create basic profile
         var profile = new UserProfile();
         profile.setGender(request.gender());
         profile.setAge(request.age());
         profile.setCapital(request.capital());
-        profile.setMode(request.mode());
         
         // Generate AI-enhanced profile data
         try {
@@ -58,8 +57,7 @@ public class ProfileService {
         
         return new CreateProfileResponse(
             profile.getId(),
-            summary,
-            profile.getMode()
+            summary
         );
     }
     
@@ -78,9 +76,8 @@ public class ProfileService {
             - Gender: %s
             - Age: %d
             - Capital: %s SEK (leisure budget)
-            - Mode: %s
             
-            Generate a realistic Swedish user profile as valid JSON only:
+            Generate a realistic user profile as valid JSON only:
             {
               "personality": {
                 "openness": "low|medium|high",
@@ -95,7 +92,7 @@ public class ProfileService {
               "priorExperiences": [
                 {"title": "Example experience", "category": "Adventure", "year": 2023}
               ],
-              "summary": "1-2 sentences in Swedish describing this person"
+              "summary": "1-2 sentences in English describing this person"
             }
             
             Rules:
@@ -106,7 +103,7 @@ public class ProfileService {
             - Keep themes array to 3-5 items
             - Return only valid JSON, no other text
             """, 
-            request.gender(), request.age(), request.capital(), request.mode(),
+            request.gender(), request.age(), request.capital(),
             request.age(), request.capital());
     }
     

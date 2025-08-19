@@ -1,16 +1,20 @@
 import { useState } from 'react';
 import { OnboardingForm } from './components/OnboardingForm';
+import { CategorySelectionPage } from './components/CategorySelectionPage';
 import { SuggestionCard } from './components/SuggestionCard';
 import { Card, CardContent } from './components/ui/card';
 import { Button } from './components/ui/button';
 import { api } from './services/api';
 import type { CreateProfileRequest, CreateProfileResponse, Suggestion } from './types';
+import type { SpendingCategory, SuggestionMode } from './types/categories';
 
-type AppState = 'onboarding' | 'suggestions' | 'loading' | 'error';
+type AppState = 'onboarding' | 'category-selection' | 'suggestions' | 'loading' | 'error';
 
 function App() {
   const [state, setState] = useState<AppState>('onboarding');
   const [profile, setProfile] = useState<CreateProfileResponse | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<SpendingCategory | null>(null);
+  const [selectedMode, setSelectedMode] = useState<SuggestionMode | null>(null);
   const [currentSuggestion, setCurrentSuggestion] = useState<Suggestion | null>(null);
   const [acceptedCount, setAcceptedCount] = useState(0);
   const [error, setError] = useState<string>('');
@@ -23,10 +27,7 @@ function App() {
     try {
       const profileResponse = await api.createProfile(profileRequest);
       setProfile(profileResponse);
-      setState('loading');
-      
-      // Try to get first suggestion
-      await loadNextSuggestion(profileResponse.profileId);
+      setState('category-selection');
       
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create profile');
@@ -36,9 +37,21 @@ function App() {
     }
   };
 
-  const loadNextSuggestion = async (profileId: string) => {
+  const handleCategorySelect = async (category: SpendingCategory, mode: SuggestionMode) => {
+    setSelectedCategory(category);
+    setSelectedMode(mode);
+    
+    if (!profile) return;
+    
+    setState('loading');
+    
+    // Try to get first suggestion with the selected category and mode
+    await loadNextSuggestion(profile.profileId, category, mode);
+  };
+
+  const loadNextSuggestion = async (profileId: string, category: SpendingCategory, mode: SuggestionMode) => {
     try {
-      let suggestion = await api.getNextSuggestion(profileId);
+      let suggestion = await api.getNextSuggestion(profileId, category, mode);
       
       if (!suggestion) {
         // Show loading state while generating new suggestions
@@ -46,15 +59,15 @@ function App() {
         setCurrentSuggestion(null);
         
         // Try to refill suggestions
-        await api.refillSuggestions(profileId, 5);
-        suggestion = await api.getNextSuggestion(profileId);
+        await api.refillSuggestions(profileId, category, mode, 5);
+        suggestion = await api.getNextSuggestion(profileId, category, mode);
       }
       
       if (suggestion) {
         setCurrentSuggestion(suggestion);
         setState('suggestions');
       } else {
-        setError('Inga fler förslag tillgängliga');
+        setError('No more suggestions available');
         setState('error');
       }
     } catch (err) {
@@ -64,7 +77,7 @@ function App() {
   };
 
   const handleAccept = async () => {
-    if (!profile || !currentSuggestion) return;
+    if (!profile || !currentSuggestion || !selectedCategory || !selectedMode) return;
     
     setLoading(true);
     try {
@@ -75,7 +88,7 @@ function App() {
       });
       
       setAcceptedCount(prev => prev + 1);
-      await loadNextSuggestion(profile.profileId);
+      await loadNextSuggestion(profile.profileId, selectedCategory, selectedMode);
       
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to accept suggestion');
@@ -85,7 +98,7 @@ function App() {
   };
 
   const handleReject = async () => {
-    if (!profile || !currentSuggestion) return;
+    if (!profile || !currentSuggestion || !selectedCategory || !selectedMode) return;
     
     setLoading(true);
     try {
@@ -95,7 +108,7 @@ function App() {
         verdict: 'REJECT'
       });
       
-      await loadNextSuggestion(profile.profileId);
+      await loadNextSuggestion(profile.profileId, selectedCategory, selectedMode);
       
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to reject suggestion');
@@ -107,6 +120,8 @@ function App() {
   const resetApp = () => {
     setState('onboarding');
     setProfile(null);
+    setSelectedCategory(null);
+    setSelectedMode(null);
     setCurrentSuggestion(null);
     setAcceptedCount(0);
     setError('');
@@ -115,16 +130,6 @@ function App() {
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-2xl">
-        
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold tracking-tight mb-2">
-            Bucket List Generator
-          </h1>
-          <p className="text-muted-foreground text-lg">
-            AI-genererade förslag anpassade för dig
-          </p>
-        </div>
 
         {/* Main Content */}
         <div className="flex justify-center">
@@ -132,12 +137,19 @@ function App() {
             <OnboardingForm onSubmit={handleCreateProfile} loading={loading} />
           )}
 
+          {state === 'category-selection' && profile && (
+            <CategorySelectionPage 
+              profileId={profile.profileId}
+              onCategorySelect={handleCategorySelect}
+            />
+          )}
+
           {state === 'loading' && (
             <Card className="w-full max-w-md">
               <CardContent className="flex flex-col items-center justify-center py-12">
                 <div className="animate-spin rounded-full h-12 w-12 border-2 border-primary border-t-transparent mb-4"></div>
                 <p className="text-muted-foreground">
-                  {profile ? 'Genererar nya förslag...' : 'Genererar personliga förslag...'}
+                  {profile ? 'Generating new suggestions...' : 'Generating personalized suggestions...'}
                 </p>
               </CardContent>
             </Card>
@@ -157,7 +169,7 @@ function App() {
                     <div className="flex items-center justify-center gap-2">
                       <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                       <span className="text-sm font-medium text-green-600">
-                        {acceptedCount} förslag tillagda
+                        {acceptedCount} suggestions added
                       </span>
                     </div>
                   </div>
@@ -180,7 +192,7 @@ function App() {
                   size="sm"
                   className="text-muted-foreground hover:text-foreground"
                 >
-                  Starta om
+                  Start over
                 </Button>
               </div>
             </div>
@@ -194,7 +206,7 @@ function App() {
                     <p className="text-destructive font-medium">{error}</p>
                   </div>
                   <Button onClick={resetApp}>
-                    Försök igen
+                    Try again
                   </Button>
                 </div>
               </CardContent>

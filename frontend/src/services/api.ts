@@ -1,4 +1,5 @@
 import type { CreateProfileRequest, CreateProfileResponse, Suggestion, FeedbackRequest } from '../types';
+import type { SpendingCategory, SuggestionMode } from '../types/categories';
 
 const API_BASE = 'http://localhost:8080/api';
 
@@ -19,8 +20,8 @@ export const api = {
     return response.json();
   },
 
-  async getNextSuggestion(profileId: string): Promise<Suggestion | null> {
-    const response = await fetch(`${API_BASE}/suggestions/next?profileId=${profileId}`);
+  async getNextSuggestion(profileId: string, category: SpendingCategory, mode: SuggestionMode): Promise<Suggestion | null> {
+    const response = await fetch(`${API_BASE}/suggestions/next?profileId=${profileId}&category=${category}&mode=${mode}`);
     
     if (response.status === 204) {
       return null; // No suggestions available
@@ -33,8 +34,8 @@ export const api = {
     return response.json();
   },
 
-  async refillSuggestions(profileId: string, batchSize: number = 5): Promise<Suggestion[]> {
-    const response = await fetch(`${API_BASE}/suggestions/refill?profileId=${profileId}`, {
+  async refillSuggestions(profileId: string, category: SpendingCategory, mode: SuggestionMode, batchSize: number = 5): Promise<Suggestion[]> {
+    const response = await fetch(`${API_BASE}/suggestions/refill?profileId=${profileId}&category=${category}&mode=${mode}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -47,7 +48,7 @@ export const api = {
     }
     
     const result = await response.json();
-    return result.added;
+    return result.suggestions || result.added; // Handle different response formats
   },
 
   async submitFeedback(feedback: FeedbackRequest): Promise<void> {

@@ -35,9 +35,6 @@ public class Suggestion {
     @Column(nullable = false)
     private PriceBand priceBand;
     
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private Category category;
     
     @Column(length = 64)
     private String sourcePromptHash;
@@ -45,8 +42,6 @@ public class Suggestion {
     @Column(length = 64)
     private String contentHash;
     
-    @Column(precision = 10, scale = 2)
-    private BigDecimal estimatedCost;
     
     @Column(columnDefinition = "TEXT")
     private String budgetBreakdownJson;

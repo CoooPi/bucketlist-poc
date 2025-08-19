@@ -1,4 +1,4 @@
-import type { Suggestion, PriceBand, Category } from '../types';
+import type { Suggestion, PriceBand } from '../types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -21,22 +21,12 @@ const getPriceBandVariant = (priceBand: PriceBand) => {
 
 const getPriceBandText = (priceBand: PriceBand): string => {
   switch (priceBand) {
-    case 'LOW': return 'Låg kostnad';
-    case 'MEDIUM': return 'Medel kostnad';
-    case 'HIGH': return 'Hög kostnad';
+    case 'LOW': return 'Low cost';
+    case 'MEDIUM': return 'Medium cost';
+    case 'HIGH': return 'High cost';
   }
 };
 
-const getCategoryText = (category: Category): string => {
-  switch (category) {
-    case 'TRAVEL': return 'Resa';
-    case 'ADVENTURE': return 'Äventyr';
-    case 'LEARNING': return 'Lärande';
-    case 'WELLNESS': return 'Hälsa';
-    case 'FAMILY': return 'Familj';
-    case 'OTHER': return 'Övrigt';
-  }
-};
 
 export function SuggestionCard({ suggestion, onAccept, onReject, loading = false }: SuggestionCardProps) {
   const formatCurrency = (amount: number) => {
@@ -48,6 +38,10 @@ export function SuggestionCard({ suggestion, onAccept, onReject, loading = false
     }).format(amount);
   };
 
+  const calculateTotalCost = () => {
+    return suggestion.budgetBreakdown?.reduce((total, item) => total + item.amount, 0) || 0;
+  };
+
   return (
     <Card className="w-full max-w-md">
       <CardHeader>
@@ -55,15 +49,12 @@ export function SuggestionCard({ suggestion, onAccept, onReject, loading = false
           <Badge variant={getPriceBandVariant(suggestion.priceBand)}>
             {getPriceBandText(suggestion.priceBand)}
           </Badge>
-          <Badge variant="outline">
-            {getCategoryText(suggestion.category)}
-          </Badge>
         </div>
         <CardTitle className="text-xl">
           {suggestion.title}
         </CardTitle>
         <div className="text-2xl font-bold text-primary">
-          {formatCurrency(suggestion.estimatedCost)}
+          {formatCurrency(calculateTotalCost())}
         </div>
       </CardHeader>
       <CardContent>
@@ -74,7 +65,7 @@ export function SuggestionCard({ suggestion, onAccept, onReject, loading = false
         {/* Budget Breakdown */}
         {suggestion.budgetBreakdown && suggestion.budgetBreakdown.length > 0 && (
           <div className="mb-6">
-            <h4 className="text-sm font-medium mb-3 text-muted-foreground">Budget uppdelning:</h4>
+            <h4 className="text-sm font-medium mb-3 text-muted-foreground">Budget breakdown:</h4>
             <div className="space-y-2">
               {suggestion.budgetBreakdown.map((item, index) => (
                 <div key={index} className="flex justify-between items-center text-sm">
@@ -100,17 +91,17 @@ export function SuggestionCard({ suggestion, onAccept, onReject, loading = false
             className="flex-1"
           >
             <X className="w-4 h-4 mr-2" />
-            Nej tack
+            No thanks
           </Button>
           
           <Button
             onClick={onAccept}
             disabled={loading}
             size="lg"
-            className="flex-1 bg-green-600 hover:bg-green-700"
+            className="flex-1 bg-green-600 hover:bg-green-700 text-gray-100"
           >
             <Check className="w-4 h-4 mr-2" />
-            Lägg till
+            Add to list
           </Button>
         </div>
       </CardContent>

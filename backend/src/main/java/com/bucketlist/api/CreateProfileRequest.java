@@ -1,7 +1,6 @@
 package com.bucketlist.api;
 
 import com.bucketlist.domain.Gender;
-import com.bucketlist.domain.Mode;
 import jakarta.validation.constraints.*;
 
 import java.math.BigDecimal;
@@ -15,7 +14,5 @@ public record CreateProfileRequest(
     
     @NotNull 
     @DecimalMin(value = "0.0", message = "Capital must be positive")
-    BigDecimal capital,
-    
-    @NotNull Mode mode
+    BigDecimal capital
 ) {}

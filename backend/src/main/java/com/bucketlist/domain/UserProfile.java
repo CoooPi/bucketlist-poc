@@ -28,9 +28,6 @@ public class UserProfile {
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal capital;
     
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private Mode mode;
     
     @Column(columnDefinition = "TEXT")
     private String personalityJson;

@@ -29,14 +29,14 @@ public class SuggestionService {
     private final ChatClient chatClient;
     private final ObjectMapper objectMapper;
     
-    public List<SuggestionDto> generateSuggestions(UUID profileId, int count) {
-        log.info("Generating {} suggestions for profile {}", count, profileId);
+    public List<SuggestionDto> generateSuggestions(UUID profileId, SpendingCategory category, SuggestionMode mode, int count) {
+        log.info("Generating {} suggestions for profile {} with category {} and mode {}", count, profileId, category, mode);
         
         var profile = userProfileRepository.findById(profileId)
             .orElseThrow(() -> new RuntimeException("Profile not found: " + profileId));
         
         try {
-            String prompt = buildSuggestionPrompt(profile, count);
+            String prompt = buildSuggestionPrompt(profile, category, mode, count);
             String response = chatClient.prompt()
                 .user(prompt)
                 .call()
@@ -52,12 +52,12 @@ public class SuggestionService {
         }
     }
     
-    public Optional<SuggestionDto> getNextSuggestion(UUID profileId) {
+    public Optional<SuggestionDto> getNextSuggestion(UUID profileId, SpendingCategory category, SuggestionMode mode) {
         var suggestions = suggestionRepository.findUnratedByProfileId(profileId);
         
         if (suggestions.isEmpty()) {
             // Try to generate more suggestions
-            var newSuggestions = generateSuggestions(profileId, 5);
+            var newSuggestions = generateSuggestions(profileId, category, mode, 5);
             if (!newSuggestions.isEmpty()) {
                 return Optional.of(newSuggestions.get(0));
             }
@@ -72,8 +72,6 @@ public class SuggestionService {
             suggestion.getTitle(),
             suggestion.getDescription(),
             suggestion.getPriceBand(),
-            suggestion.getCategory(),
-            suggestion.getEstimatedCost(),
             budgetItems
         ));
     }
@@ -104,35 +102,44 @@ public class SuggestionService {
             .collect(Collectors.toSet());
         
         return suggestionRepository.findAllById(suggestionIds).stream()
-            .map(s -> new SuggestionDto(s.getId(), s.getTitle(), s.getDescription(), s.getPriceBand(), s.getCategory(), 
-                     s.getEstimatedCost(), parseBudgetBreakdown(s.getBudgetBreakdownJson())))
+            .map(s -> new SuggestionDto(s.getId(), s.getTitle(), s.getDescription(), s.getPriceBand(), 
+                     parseBudgetBreakdown(s.getBudgetBreakdownJson())))
             .collect(Collectors.toList());
     }
     
-    private String buildSuggestionPrompt(UserProfile profile, int count) {
+    private String buildSuggestionPrompt(UserProfile profile, SpendingCategory spendingCategory, SuggestionMode suggestionMode, int count) {
         var priceBands = calculateRelativePriceBands(profile.getCapital());
+        String categoryFocus = buildCategoryFocus(spendingCategory);
+        String modeInstructions = buildModeInstructions(suggestionMode);
         
         return String.format("""
-            Generate %d bucket list suggestions for this Swedish user profile:
+            Generate %d bucket list suggestions for this user profile:
             
             Basic Info:
             - Age: %d
-            - Gender: %s
+            - Gender: %s  
             - Capital: %s SEK
-            - Mode: %s
             
             Personality: %s
             Preferences: %s
             Prior Experiences: %s
             
+            SPENDING CATEGORY FOCUS: %s (CRITICAL: ALL SUGGESTIONS MUST BE STRICTLY RELATED TO THIS CATEGORY)
+            %s
+            
+            SUGGESTION MODE: %s
+            %s
+            
+            CRITICAL REQUIREMENT: Every single suggestion MUST be directly related to the selected spending category "%s".
+            Do NOT suggest anything outside this category. If the category is "Travel & Vacation", suggest ONLY travel and vacation experiences.
+            If the category is "Health & Wellness", suggest ONLY health and wellness activities. Stay strictly within the category boundaries.
+            
             Return a JSON array of exactly %d suggestions:
             [
               {
                 "title": "Short engaging title (max 70 chars)",
-                "description": "Detailed description (max 240 chars)",
+                "description": "Detailed description (max 240 chars)", 
                 "priceBand": "LOW|MEDIUM|HIGH",
-                "category": "TRAVEL|ADVENTURE|LEARNING|WELLNESS|FAMILY|OTHER",
-                "estimatedCost": 25000,
                 "budgetBreakdown": [
                   {"category": "Transport", "description": "Round-trip flights", "amount": 8000},
                   {"category": "Accommodation", "description": "4 nights hotel", "amount": 12000},
@@ -142,65 +149,30 @@ public class SuggestionService {
               }
             ]
             
-            IMPORTANT - Valid category values ONLY (use these exact strings):
-            - TRAVEL: trips, destinations, journeys, hotels, flights
-            - ADVENTURE: outdoor activities, sports, challenges, hiking, climbing  
-            - LEARNING: courses, skills, education, workshops, classes
-            - WELLNESS: health, fitness, self-care, yoga, meditation
-            - FAMILY: activities with loved ones, kids, relatives
-            - OTHER: food experiences, culture, art, music, festivals, anything else
-            
-            CRITICAL MAPPING RULES:
-            - Food/culinary activities → OTHER
-            - Culture/art/music → OTHER  
-            - Museums/galleries → OTHER
-            - Festivals/events → OTHER
-            
             Price band rules (relative to user budget of %s SEK):
             - LOW: < %s SEK (up to 10%% of budget)
             - MEDIUM: %s - %s SEK (10-40%% of budget)
             - HIGH: > %s SEK (40%%+ of budget - BE BOLD!)
             
-            Mode rules:
-            - CREATIVE: Include surprising but feasible ideas
-            - ALIGNED: Focus on conventional popular activities
-            
-            GLOBAL DIVERSITY REQUIREMENTS:
-            - Suggest experiences from around the world, not just Sweden
-            - Include international destinations (Asia, Americas, Africa, Europe, Oceania)
-            - Balance local Swedish experiences with global bucket list items
-            - Consider worldwide cultural experiences, natural wonders, and adventures
-            - Only 20%% of suggestions should be Sweden-specific
-            
-            BUDGET SCALING REQUIREMENTS:
-            - For LOW budgets (< %s SEK): Focus on accessible local experiences, short trips, courses
-            - For MEDIUM budgets (%s - %s SEK): Include European trips, longer adventures, premium experiences
-            - For HIGH budgets (> %s SEK): GO ABSOLUTELY WILD! Suggest ultra-luxury, exclusive, once-in-a-lifetime experiences
-            - High budget examples: Private space tourism (Virgin Galactic/Blue Origin), entire cruise ship charters, 
-              buying private islands for vacations, commissioning custom superyachts, private jet world tours with 
-              presidential suites, exclusive access to closed historical sites, hiring famous chefs for private dinners,
-              custom expedition to Antarctica or Everest base camps, renting entire luxury resorts, private concerts 
-              by famous artists, bespoke adventure experiences money can't usually buy
-            - For budgets over 1 million SEK: Suggest experiences costing 500K-2M+ SEK without hesitation
-            - For budgets over 3 million SEK: Dream bigger - suggest 1M-3M+ SEK experiences
-            - Match the extravagance level to the budget - wealthy users should get wealthy suggestions!
-            
             BUDGET CALCULATION RULES:
-            - estimatedCost must be realistic and match the priceBand
-            - budgetBreakdown items must add up to estimatedCost
+            - budgetBreakdown total must be realistic and match the priceBand
             - Include relevant categories: Transport, Accommodation, Activities, Food, Equipment, Other, etc.
             - For local activities, focus on Activities/Equipment costs
             - For travel, include flights/transport from Sweden
-            - Use "Other" category for miscellaneous expenses like visas, insurance, tips
             - Scale suggestions to user's budget - higher budgets should get more luxurious/exclusive experiences
+            - Ensure budgetBreakdown amounts add up to appropriate totals for the price band
             
-            CRITICAL: Use only the exact category values listed above. Return only the JSON array, no other text.
+            CRITICAL: Return only the JSON array, no other text.
+            
+            LANGUAGE REQUIREMENT: All suggestion titles and descriptions MUST be in English. Do not use Swedish or any other language.
             """,
-            count, profile.getAge(), profile.getGender(), profile.getCapital(), profile.getMode(),
+            count, profile.getAge(), profile.getGender(), profile.getCapital(),
             profile.getPersonalityJson(), profile.getPreferencesJson(), profile.getPriorExperiencesJson(),
+            spendingCategory.getDisplayName(), categoryFocus,
+            suggestionMode.getDisplayName(), modeInstructions,
+            spendingCategory.getDisplayName(),
             count, profile.getCapital(), priceBands.lowThreshold(), priceBands.mediumLow(), 
-            priceBands.mediumHigh(), priceBands.highThreshold(),
-            priceBands.lowThreshold(), priceBands.mediumLow(), priceBands.mediumHigh(), priceBands.highThreshold());
+            priceBands.mediumHigh(), priceBands.highThreshold());
     }
     
     private List<SuggestionDto> parseSuggestionsFromResponse(String response, UserProfile profile) {
@@ -222,26 +194,14 @@ public class SuggestionService {
                         priceBand = PriceBand.MEDIUM;
                     }
                     
-                    // Parse category with fallback
-                    Category category;
-                    try {
-                        category = Category.valueOf(suggestionNode.get("category").asText());
-                    } catch (IllegalArgumentException e) {
-                        log.warn("Invalid category: {}, defaulting to OTHER", suggestionNode.get("category").asText());
-                        category = Category.OTHER;
-                    }
                     
                     // Parse budget information
-                    BigDecimal estimatedCost = suggestionNode.has("estimatedCost") ? 
-                        BigDecimal.valueOf(suggestionNode.get("estimatedCost").asDouble()) : 
-                        BigDecimal.ZERO;
-                    
                     String budgetBreakdownJson = suggestionNode.has("budgetBreakdown") ?
                         suggestionNode.get("budgetBreakdown").toString() :
                         "[]";
                     
                     // Create content hash for deduplication
-                    String contentHash = createContentHash(title, category);
+                    String contentHash = createContentHash(title);
                     
                     // Skip if duplicate
                     if (suggestionRepository.existsByContentHash(contentHash)) {
@@ -255,8 +215,6 @@ public class SuggestionService {
                     suggestion.setTitle(title);
                     suggestion.setDescription(description);
                     suggestion.setPriceBand(priceBand);
-                    suggestion.setCategory(category);
-                    suggestion.setEstimatedCost(estimatedCost);
                     suggestion.setBudgetBreakdownJson(budgetBreakdownJson);
                     suggestion.setContentHash(contentHash);
                     
@@ -270,8 +228,6 @@ public class SuggestionService {
                         suggestion.getTitle(),
                         suggestion.getDescription(),
                         suggestion.getPriceBand(),
-                        suggestion.getCategory(),
-                        suggestion.getEstimatedCost(),
                         budgetItems
                     ));
                     
@@ -289,9 +245,9 @@ public class SuggestionService {
     }
     
     
-    private String createContentHash(String title, Category category) {
+    private String createContentHash(String title) {
         try {
-            String content = (title.toLowerCase().trim() + category.toString()).toLowerCase();
+            String content = title.toLowerCase().trim();
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] hash = digest.digest(content.getBytes(StandardCharsets.UTF_8));
             return bytesToHex(hash);
@@ -351,5 +307,65 @@ public class SuggestionService {
         BigDecimal highThreshold = mediumHigh;
         
         return new PriceBands(lowThreshold, mediumLow, mediumHigh, highThreshold);
+    }
+    
+    private String buildCategoryFocus(SpendingCategory category) {
+        return switch (category) {
+            case TRAVEL_VACATION -> """
+                Focus on travel destinations, vacation experiences, hotels, resorts, flights, and tourism.
+                Include both international destinations and unique travel experiences within Sweden.
+                Emphasize journeys, cultural immersion, and vacation memories.""";
+            
+            case LUXURY_THINGS -> """
+                Focus on high-end products, luxury goods, premium services, and exclusive experiences.
+                Include luxury cars, watches, jewelry, designer items, premium memberships, and elite services.
+                Emphasize quality, exclusivity, and status symbols.""";
+            
+            case HEALTH_WELLNESS -> """
+                Focus on physical health, mental wellbeing, fitness, nutrition, and self-care.
+                Include spa treatments, medical procedures, fitness programs, wellness retreats, and health coaching.
+                Emphasize improving quality of life and personal wellbeing.""";
+            
+            case SOCIAL_LIFESTYLE -> """
+                Focus on social activities, entertainment, lifestyle enhancements, and experiences with others.
+                Include parties, events, social clubs, networking, lifestyle upgrades, and community activities.
+                Emphasize social connections and lifestyle improvements.""";
+            
+            case MENTAL_EMOTIONAL -> """
+                Focus on mental health, personal development, therapy, coaching, and emotional wellbeing.
+                Include meditation retreats, therapy sessions, personal coaching, mindfulness programs, and stress relief.
+                Emphasize inner peace, mental clarity, and emotional growth.""";
+            
+            case SMALL_LUXURY -> """
+                Focus on affordable luxury treats, small indulgences, and everyday pleasures.
+                Include premium food, wine, small luxury items, comfort upgrades, and accessible treats.
+                Emphasize quality over quantity and everyday luxury moments.""";
+            
+            case FREEDOM_COMFORT -> """
+                Focus on experiences and purchases that provide freedom, comfort, and convenience.
+                Include time-saving services, comfort improvements, freedom from obligations, and peace of mind.
+                Emphasize reducing stress and increasing personal freedom.""";
+            
+            case OPTIONAL_ADDONS -> """
+                Focus on supplementary experiences, add-on services, upgrades, and extra features.
+                Include premium versions of existing things, service upgrades, bonus experiences, and enhancements.
+                Emphasize improving existing experiences rather than entirely new ones.""";
+        };
+    }
+    
+    private String buildModeInstructions(SuggestionMode mode) {
+        return switch (mode) {
+            case PROVEN -> """
+                Generate POPULAR and WELL-KNOWN bucket list items that most people would enjoy and find appealing.
+                Focus on tried-and-true experiences that have broad appeal and are commonly desired.
+                Examples: Visit famous landmarks, take popular courses, try well-known adventures.
+                Avoid overly unique or niche suggestions - stick to crowd-pleasers and classic experiences.""";
+            
+            case CREATIVE -> """
+                Generate UNIQUE and UNCOMMON bucket list items that people generally wouldn't think of on their own.
+                Focus on surprising, creative, and imaginative experiences that stand out from typical bucket lists.
+                Examples: Sleep in unusual accommodations, try obscure skills, create custom experiences.
+                Be bold and creative - suggest things that would make people say "I never thought of that!".""";
+        };
     }
 }

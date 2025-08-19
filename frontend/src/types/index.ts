@@ -8,13 +8,11 @@ export interface CreateProfileRequest {
   gender: Gender;
   age: number;
   capital: number;
-  mode: Mode;
 }
 
 export interface CreateProfileResponse {
   profileId: string;
   profileSummary: string;
-  mode: Mode;
 }
 
 export interface Suggestion {
@@ -22,8 +20,6 @@ export interface Suggestion {
   title: string;
   description: string;
   priceBand: PriceBand;
-  category: Category;
-  estimatedCost: number;
   budgetBreakdown: BudgetItem[];
 }
 
