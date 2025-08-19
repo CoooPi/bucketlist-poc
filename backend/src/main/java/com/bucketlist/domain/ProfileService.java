@@ -57,7 +57,8 @@ public class ProfileService {
         
         return new CreateProfileResponse(
             profile.getId(),
-            summary
+            summary,
+            profile.getCapital()
         );
     }
     

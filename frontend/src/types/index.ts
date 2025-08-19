@@ -13,6 +13,7 @@ export interface CreateProfileRequest {
 export interface CreateProfileResponse {
   profileId: string;
   profileSummary: string;
+  capital: number;
 }
 
 export interface Suggestion {

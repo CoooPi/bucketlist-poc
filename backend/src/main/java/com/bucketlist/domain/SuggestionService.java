@@ -2,6 +2,7 @@ package com.bucketlist.domain;
 
 import com.bucketlist.api.SuggestionDto;
 import com.bucketlist.api.BudgetItem;
+import com.bucketlist.api.SuggestionFeedbackContext;
 import com.bucketlist.infra.SuggestionFeedbackRepository;
 import com.bucketlist.infra.SuggestionRepository;
 import com.bucketlist.infra.UserProfileRepository;
@@ -36,7 +37,10 @@ public class SuggestionService {
             .orElseThrow(() -> new RuntimeException("Profile not found: " + profileId));
         
         try {
-            String prompt = buildSuggestionPrompt(profile, category, mode, count);
+            // Get feedback history for context
+            List<SuggestionFeedbackContext> feedbackHistory = getFeedbackHistoryForProfile(profileId);
+            
+            String prompt = buildSuggestionPrompt(profile, category, mode, count, feedbackHistory);
             String response = chatClient.prompt()
                 .user(prompt)
                 .call()
@@ -71,7 +75,6 @@ public class SuggestionService {
             suggestion.getId(),
             suggestion.getTitle(),
             suggestion.getDescription(),
-            suggestion.getPriceBand(),
             budgetItems
         ));
     }
@@ -102,15 +105,53 @@ public class SuggestionService {
             .collect(Collectors.toSet());
         
         return suggestionRepository.findAllById(suggestionIds).stream()
-            .map(s -> new SuggestionDto(s.getId(), s.getTitle(), s.getDescription(), s.getPriceBand(), 
+            .map(s -> new SuggestionDto(s.getId(), s.getTitle(), s.getDescription(), 
                      parseBudgetBreakdown(s.getBudgetBreakdownJson())))
             .collect(Collectors.toList());
     }
     
-    private String buildSuggestionPrompt(UserProfile profile, SpendingCategory spendingCategory, SuggestionMode suggestionMode, int count) {
+    public List<SuggestionFeedbackContext> getFeedbackHistoryForProfile(UUID profileId) {
+        log.debug("Retrieving feedback history for profile {}", profileId);
+        
+        // Get all feedback for this profile, ordered by creation time (most recent first)
+        var allFeedback = feedbackRepository.findByProfileIdOrderByCreatedAtDesc(profileId);
+        
+        // Limit to last 20 feedback items to avoid overwhelming the AI prompt
+        var recentFeedback = allFeedback.stream().limit(20).collect(Collectors.toList());
+        
+        // Get suggestion details for each feedback
+        var suggestionIds = recentFeedback.stream()
+            .map(SuggestionFeedback::getSuggestionId)
+            .collect(Collectors.toSet());
+        
+        var suggestions = suggestionRepository.findAllById(suggestionIds);
+        var suggestionMap = suggestions.stream()
+            .collect(Collectors.toMap(Suggestion::getId, s -> s));
+        
+        // Build feedback context list
+        return recentFeedback.stream()
+            .map(feedback -> {
+                var suggestion = suggestionMap.get(feedback.getSuggestionId());
+                if (suggestion != null) {
+                    return new SuggestionFeedbackContext(
+                        suggestion.getTitle(),
+                        suggestion.getDescription(),
+                        feedback.getVerdict(),
+                        feedback.getReason(),
+                        feedback.getCreatedAt()
+                    );
+                }
+                return null;
+            })
+            .filter(Objects::nonNull)
+            .collect(Collectors.toList());
+    }
+    
+    private String buildSuggestionPrompt(UserProfile profile, SpendingCategory spendingCategory, SuggestionMode suggestionMode, int count, List<SuggestionFeedbackContext> feedbackHistory) {
         var priceBands = calculateRelativePriceBands(profile.getCapital());
         String categoryFocus = buildCategoryFocus(spendingCategory);
         String modeInstructions = buildModeInstructions(suggestionMode);
+        String feedbackContext = buildFeedbackContextPrompt(feedbackHistory);
         
         return String.format("""
             Generate %d bucket list suggestions for this user profile:
@@ -123,6 +164,8 @@ public class SuggestionService {
             Personality: %s
             Preferences: %s
             Prior Experiences: %s
+            
+            %s
             
             SPENDING CATEGORY FOCUS: %s (CRITICAL: ALL SUGGESTIONS MUST BE STRICTLY RELATED TO THIS CATEGORY)
             %s
@@ -139,7 +182,6 @@ public class SuggestionService {
               {
                 "title": "Short engaging title (max 70 chars)",
                 "description": "Detailed description (max 240 chars)", 
-                "priceBand": "LOW|MEDIUM|HIGH",
                 "budgetBreakdown": [
                   {"category": "Transport", "description": "Round-trip flights", "amount": 8000},
                   {"category": "Accommodation", "description": "4 nights hotel", "amount": 12000},
@@ -149,18 +191,14 @@ public class SuggestionService {
               }
             ]
             
-            Price band rules (relative to user budget of %s SEK):
-            - LOW: < %s SEK (up to 10%% of budget)
-            - MEDIUM: %s - %s SEK (10-40%% of budget)
-            - HIGH: > %s SEK (40%%+ of budget - BE BOLD!)
-            
             BUDGET CALCULATION RULES:
-            - budgetBreakdown total must be realistic and match the priceBand
+            - Create realistic budget breakdowns with appropriate cost ranges for the user's budget (%s SEK)
             - Include relevant categories: Transport, Accommodation, Activities, Food, Equipment, Other, etc.
             - For local activities, focus on Activities/Equipment costs
             - For travel, include flights/transport from Sweden
             - Scale suggestions to user's budget - higher budgets should get more luxurious/exclusive experiences
-            - Ensure budgetBreakdown amounts add up to appropriate totals for the price band
+            - Vary suggestion costs across the full spectrum: some affordable (< 10%% of budget), some moderate (10-40%%), some expensive (40%%+)
+            - Ensure budgetBreakdown amounts are realistic for each experience type
             
             CRITICAL: Return only the JSON array, no other text.
             
@@ -168,11 +206,67 @@ public class SuggestionService {
             """,
             count, profile.getAge(), profile.getGender(), profile.getCapital(),
             profile.getPersonalityJson(), profile.getPreferencesJson(), profile.getPriorExperiencesJson(),
+            feedbackContext,
             spendingCategory.getDisplayName(), categoryFocus,
             suggestionMode.getDisplayName(), modeInstructions,
             spendingCategory.getDisplayName(),
-            count, profile.getCapital(), priceBands.lowThreshold(), priceBands.mediumLow(), 
-            priceBands.mediumHigh(), priceBands.highThreshold());
+            count, profile.getCapital());
+    }
+    
+    private String buildFeedbackContextPrompt(List<SuggestionFeedbackContext> feedbackHistory) {
+        if (feedbackHistory.isEmpty()) {
+            return "PREVIOUS FEEDBACK CONTEXT: No previous suggestions available for learning.";
+        }
+        
+        var acceptedSuggestions = feedbackHistory.stream()
+            .filter(f -> f.verdict() == Verdict.ACCEPT)
+            .collect(Collectors.toList());
+        
+        var rejectedSuggestions = feedbackHistory.stream()
+            .filter(f -> f.verdict() == Verdict.REJECT)
+            .collect(Collectors.toList());
+        
+        StringBuilder contextBuilder = new StringBuilder();
+        contextBuilder.append("PREVIOUS FEEDBACK CONTEXT:\n");
+        
+        if (!acceptedSuggestions.isEmpty()) {
+            contextBuilder.append("User has previously ACCEPTED these suggestions:\n");
+            for (SuggestionFeedbackContext feedback : acceptedSuggestions.stream().limit(5).collect(Collectors.toList())) {
+                contextBuilder.append("- \"").append(feedback.title()).append("\": ").append(feedback.description());
+                if (feedback.reason() != null && !feedback.reason().trim().isEmpty()) {
+                    contextBuilder.append(" - Positive feedback: ").append(feedback.reason());
+                }
+                contextBuilder.append("\n");
+            }
+            contextBuilder.append("\n");
+        }
+        
+        if (!rejectedSuggestions.isEmpty()) {
+            contextBuilder.append("User has previously REJECTED these suggestions:\n");
+            for (SuggestionFeedbackContext feedback : rejectedSuggestions.stream().limit(10).collect(Collectors.toList())) {
+                contextBuilder.append("- \"").append(feedback.title()).append("\": ").append(feedback.description());
+                if (feedback.reason() != null && !feedback.reason().trim().isEmpty()) {
+                    contextBuilder.append(" - Rejection reason: ").append(feedback.reason());
+                } else {
+                    contextBuilder.append(" - No specific reason provided");
+                }
+                contextBuilder.append("\n");
+            }
+            contextBuilder.append("\n");
+        }
+        
+        contextBuilder.append("""
+            LEARNING INSTRUCTIONS:
+            - Carefully avoid suggesting similar items to rejected suggestions
+            - Pay special attention to specific rejection reasons and avoid those patterns
+            - Focus on themes and characteristics from accepted suggestions
+            - If user rejected expensive suggestions due to cost, consider suggesting more lower price band options
+            - If user rejected specific activities, locations, or types of experiences, avoid similar ones
+            - If user provided positive feedback on accepted suggestions, incorporate those themes
+            - Learn from the patterns - what the user likes and dislikes
+            """);
+        
+        return contextBuilder.toString();
     }
     
     private List<SuggestionDto> parseSuggestionsFromResponse(String response, UserProfile profile) {
@@ -184,15 +278,6 @@ public class SuggestionService {
                 try {
                     String title = suggestionNode.get("title").asText();
                     String description = suggestionNode.get("description").asText();
-                    
-                    // Parse price band with fallback
-                    PriceBand priceBand;
-                    try {
-                        priceBand = PriceBand.valueOf(suggestionNode.get("priceBand").asText());
-                    } catch (IllegalArgumentException e) {
-                        log.warn("Invalid price band: {}, defaulting to MEDIUM", suggestionNode.get("priceBand").asText());
-                        priceBand = PriceBand.MEDIUM;
-                    }
                     
                     
                     // Parse budget information
@@ -214,7 +299,6 @@ public class SuggestionService {
                     suggestion.setProfileId(profile.getId());
                     suggestion.setTitle(title);
                     suggestion.setDescription(description);
-                    suggestion.setPriceBand(priceBand);
                     suggestion.setBudgetBreakdownJson(budgetBreakdownJson);
                     suggestion.setContentHash(contentHash);
                     
@@ -227,7 +311,6 @@ public class SuggestionService {
                         suggestion.getId(),
                         suggestion.getTitle(),
                         suggestion.getDescription(),
-                        suggestion.getPriceBand(),
                         budgetItems
                     ));
                     

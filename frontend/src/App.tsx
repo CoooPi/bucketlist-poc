@@ -97,7 +97,7 @@ function App() {
     }
   };
 
-  const handleReject = async () => {
+  const handleReject = async (reason?: string) => {
     if (!profile || !currentSuggestion || !selectedCategory || !selectedMode) return;
     
     setLoading(true);
@@ -105,7 +105,8 @@ function App() {
       await api.submitFeedback({
         profileId: profile.profileId,
         suggestionId: currentSuggestion.id,
-        verdict: 'REJECT'
+        verdict: 'REJECT',
+        reason
       });
       
       await loadNextSuggestion(profile.profileId, selectedCategory, selectedMode);
@@ -179,6 +180,7 @@ function App() {
               {/* Suggestion Card */}
               <SuggestionCard
                 suggestion={currentSuggestion}
+                userBudget={profile?.capital || 0}
                 onAccept={handleAccept}
                 onReject={handleReject}
                 loading={loading}

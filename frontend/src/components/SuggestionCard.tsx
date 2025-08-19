@@ -2,12 +2,14 @@ import type { Suggestion, PriceBand } from '../types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
+import { FeedbackPopover } from './FeedbackPopover';
 import { X, Check } from 'lucide-react';
 
 interface SuggestionCardProps {
   suggestion: Suggestion;
+  userBudget: number;
   onAccept: () => void;
-  onReject: () => void;
+  onReject: (reason?: string) => void;
   loading?: boolean;
 }
 
@@ -28,7 +30,7 @@ const getPriceBandText = (priceBand: PriceBand): string => {
 };
 
 
-export function SuggestionCard({ suggestion, onAccept, onReject, loading = false }: SuggestionCardProps) {
+export function SuggestionCard({ suggestion, userBudget, onAccept, onReject, loading = false }: SuggestionCardProps) {
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('sv-SE', {
       style: 'currency',
@@ -42,12 +44,21 @@ export function SuggestionCard({ suggestion, onAccept, onReject, loading = false
     return suggestion.budgetBreakdown?.reduce((total, item) => total + item.amount, 0) || 0;
   };
 
+  const calculatePriceBand = (): PriceBand => {
+    const totalCost = calculateTotalCost();
+    const percentage = (totalCost / userBudget) * 100;
+    
+    if (percentage < 10) return 'LOW';
+    if (percentage < 40) return 'MEDIUM';
+    return 'HIGH';
+  };
+
   return (
     <Card className="w-full max-w-md">
       <CardHeader>
         <div className="flex flex-wrap gap-2 mb-2">
-          <Badge variant={getPriceBandVariant(suggestion.priceBand)}>
-            {getPriceBandText(suggestion.priceBand)}
+          <Badge variant={getPriceBandVariant(calculatePriceBand())}>
+            {getPriceBandText(calculatePriceBand())}
           </Badge>
         </div>
         <CardTitle className="text-xl">
@@ -83,16 +94,17 @@ export function SuggestionCard({ suggestion, onAccept, onReject, loading = false
         )}
         
         <div className="flex gap-3">
-          <Button
-            onClick={onReject}
-            disabled={loading}
-            variant="outline"
-            size="lg"
-            className="flex-1"
-          >
-            <X className="w-4 h-4 mr-2" />
-            No thanks
-          </Button>
+          <FeedbackPopover onFeedbackSubmit={onReject}>
+            <Button
+              disabled={loading}
+              variant="outline"
+              size="lg"
+              className="flex-1"
+            >
+              <X className="w-4 h-4 mr-2" />
+              No thanks
+            </Button>
+          </FeedbackPopover>
           
           <Button
             onClick={onAccept}

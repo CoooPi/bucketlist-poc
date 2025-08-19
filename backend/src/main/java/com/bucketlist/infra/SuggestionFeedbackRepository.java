@@ -22,4 +22,6 @@ public interface SuggestionFeedbackRepository extends JpaRepository<SuggestionFe
     List<SuggestionFeedback> findByProfileIdAndVerdict(@Param("profileId") UUID profileId, @Param("verdict") Verdict verdict);
     
     boolean existsBySuggestionIdAndProfileId(UUID suggestionId, UUID profileId);
+    
+    List<SuggestionFeedback> findByProfileIdOrderByCreatedAtDesc(UUID profileId);
 }
