@@ -1,121 +1,162 @@
-import type { Suggestion, PriceBand } from '../types';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
+import { useState } from 'react';
+import type { BucketListSuggestion } from '../types';
 import { Button } from './ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
-import { FeedbackPopover } from './FeedbackPopover';
-import { X, Check } from 'lucide-react';
+import { Input } from './ui/input';
 
 interface SuggestionCardProps {
-  suggestion: Suggestion;
-  userBudget: number;
+  suggestion: BucketListSuggestion;
   onAccept: () => void;
-  onReject: (reason?: string) => void;
-  loading?: boolean;
+  onReject: (reason: string, isCustom: boolean) => void;
 }
 
-const getPriceBandVariant = (priceBand: PriceBand) => {
-  switch (priceBand) {
-    case 'LOW': return 'default';
-    case 'MEDIUM': return 'secondary';
-    case 'HIGH': return 'destructive';
-  }
-};
+export function SuggestionCard({ suggestion, onAccept, onReject }: SuggestionCardProps) {
+  const [showRejectOptions, setShowRejectOptions] = useState(false);
+  const [customReason, setCustomReason] = useState('');
+  const [showCustomInput, setShowCustomInput] = useState(false);
 
-const getPriceBandText = (priceBand: PriceBand): string => {
-  switch (priceBand) {
-    case 'LOW': return 'Low cost';
-    case 'MEDIUM': return 'Medium cost';
-    case 'HIGH': return 'High cost';
-  }
-};
+  const handleRejectWithReason = (reason: string, isCustom = false) => {
+    onReject(reason, isCustom);
+    setShowRejectOptions(false);
+    setShowCustomInput(false);
+    setCustomReason('');
+  };
 
+  const handleCustomReject = () => {
+    if (customReason.trim()) {
+      handleRejectWithReason(customReason.trim(), true);
+    }
+  };
 
-export function SuggestionCard({ suggestion, userBudget, onAccept, onReject, loading = false }: SuggestionCardProps) {
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('sv-SE', {
+  const formatCurrency = (amount: number, currency: string) => {
+    return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'SEK',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
+      currency: currency,
     }).format(amount);
   };
 
-  const calculateTotalCost = () => {
-    return suggestion.budgetBreakdown?.reduce((total, item) => total + item.amount, 0) || 0;
-  };
-
-  const calculatePriceBand = (): PriceBand => {
-    const totalCost = calculateTotalCost();
-    const percentage = (totalCost / userBudget) * 100;
-    
-    if (percentage < 10) return 'LOW';
-    if (percentage < 40) return 'MEDIUM';
-    return 'HIGH';
+  const getPriceColor = (totalCost: number) => {
+    if (totalCost < 100) return 'bg-green-100 text-green-800';
+    if (totalCost < 500) return 'bg-yellow-100 text-yellow-800';
+    return 'bg-red-100 text-red-800';
   };
 
   return (
-    <Card className="w-full max-w-md">
+    <Card className="w-full">
       <CardHeader>
-        <div className="flex flex-wrap gap-2 mb-2">
-          <Badge variant={getPriceBandVariant(calculatePriceBand())}>
-            {getPriceBandText(calculatePriceBand())}
-          </Badge>
-        </div>
-        <CardTitle className="text-xl">
-          {suggestion.title}
-        </CardTitle>
-        <div className="text-2xl font-bold text-primary">
-          {formatCurrency(calculateTotalCost())}
+        <div className="flex justify-between items-start gap-2">
+          <CardTitle className="text-xl">{suggestion.title}</CardTitle>
+          <div className="flex gap-2">
+            <Badge variant="outline">{suggestion.category}</Badge>
+            <Badge className={getPriceColor(suggestion.priceBreakdown.totalCost)}>
+              {formatCurrency(suggestion.priceBreakdown.totalCost, suggestion.priceBreakdown.currency)}
+            </Badge>
+          </div>
         </div>
       </CardHeader>
-      <CardContent>
-        <CardDescription className="text-base mb-4 leading-relaxed">
-          {suggestion.description}
-        </CardDescription>
-
-        {/* Budget Breakdown */}
-        {suggestion.budgetBreakdown && suggestion.budgetBreakdown.length > 0 && (
-          <div className="mb-6">
-            <h4 className="text-sm font-medium mb-3 text-muted-foreground">Budget breakdown:</h4>
-            <div className="space-y-2">
-              {suggestion.budgetBreakdown.map((item, index) => (
-                <div key={index} className="flex justify-between items-center text-sm">
-                  <div className="flex-1">
-                    <span className="font-medium">{item.category}</span>
-                    <span className="text-muted-foreground ml-1">- {item.description}</span>
-                  </div>
-                  <span className="font-medium">
-                    {formatCurrency(item.amount)}
-                  </span>
+      <CardContent className="space-y-4">
+        <p className="text-gray-700">{suggestion.description}</p>
+        
+        <div className="space-y-2">
+          <h4 className="font-medium text-sm text-gray-900">Cost Breakdown:</h4>
+          <div className="space-y-1">
+            {suggestion.priceBreakdown.lineItems.map((item, index) => (
+              <div key={index} className="flex justify-between items-center text-sm">
+                <div>
+                  <span className="font-medium">{item.name}</span>
+                  {item.description && (
+                    <span className="text-gray-600 ml-1">- {item.description}</span>
+                  )}
                 </div>
-              ))}
+                <span className="text-gray-700">
+                  {formatCurrency(item.price, suggestion.priceBreakdown.currency)}
+                </span>
+              </div>
+            ))}
+            <div className="border-t pt-1 mt-2">
+              <div className="flex justify-between items-center text-sm font-semibold">
+                <span>Total:</span>
+                <span>{formatCurrency(suggestion.priceBreakdown.totalCost, suggestion.priceBreakdown.currency)}</span>
+              </div>
             </div>
           </div>
-        )}
+        </div>
         
-        <div className="flex gap-3">
-          <FeedbackPopover onFeedbackSubmit={onReject}>
-            <Button
-              disabled={loading}
-              variant="outline"
-              size="lg"
+        {!showRejectOptions ? (
+          <div className="flex gap-2">
+            <Button onClick={onAccept} className="flex-1">
+              Accept
+            </Button>
+            <Button 
+              onClick={() => setShowRejectOptions(true)} 
+              variant="outline" 
               className="flex-1"
             >
-              <X className="w-4 h-4 mr-2" />
-              No thanks
+              Reject
             </Button>
-          </FeedbackPopover>
-          
-          <Button
-            onClick={onAccept}
-            disabled={loading}
-            size="lg"
-            className="flex-1 bg-green-600 hover:bg-green-700 text-gray-100"
-          >
-            <Check className="w-4 h-4 mr-2" />
-            Add to list
-          </Button>
-        </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm font-medium">Why would you reject this?</p>
+            <div className="space-y-2">
+              {suggestion.rejectionReasons.map((reason, index) => (
+                <Button
+                  key={index}
+                  variant="outline"
+                  size="sm"
+                  className="w-full text-left justify-start h-auto p-3"
+                  onClick={() => handleRejectWithReason(reason)}
+                >
+                  {reason}
+                </Button>
+              ))}
+              
+              {!showCustomInput ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => setShowCustomInput(true)}
+                >
+                  Other reason...
+                </Button>
+              ) : (
+                <div className="space-y-2">
+                  <Input
+                    placeholder="Enter your reason..."
+                    value={customReason}
+                    onChange={(e) => setCustomReason(e.target.value)}
+                  />
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={handleCustomReject}>
+                      Submit
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={() => {
+                        setShowCustomInput(false);
+                        setCustomReason('');
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => setShowRejectOptions(false)}
+              className="w-full"
+            >
+              Back
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

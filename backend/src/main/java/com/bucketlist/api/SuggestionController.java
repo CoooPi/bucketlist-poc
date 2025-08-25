@@ -1,84 +1,215 @@
 package com.bucketlist.api;
 
+import com.bucketlist.domain.BucketListSuggestion;
+import com.bucketlist.domain.RejectionFeedback;
 import com.bucketlist.domain.SuggestionService;
-import com.bucketlist.domain.SpendingCategory;
-import com.bucketlist.domain.SuggestionMode;
-import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/suggestions")
-@RequiredArgsConstructor
 @CrossOrigin(origins = "http://localhost:5173")
-@Slf4j
 public class SuggestionController {
     
     private final SuggestionService suggestionService;
     
-    @PostMapping("/refill")
-    public ResponseEntity<RefillResponse> refillSuggestions(
-            @RequestParam UUID profileId,
-            @RequestParam SpendingCategory category,
-            @RequestParam(defaultValue = "PROVEN") SuggestionMode mode,
-            @Valid @RequestBody(required = false) RefillRequest request) {
-        
-        int batchSize = (request != null && request.batchSize() != null) ? request.batchSize() : 5;
-        
-        log.info("Refilling suggestions for profile {} with batch size {}, category {}, mode {}", 
-                profileId, batchSize, category, mode);
-        
-        List<SuggestionDto> suggestions = suggestionService.generateSuggestions(profileId, category, mode, batchSize);
-        
-        return ResponseEntity.ok(new RefillResponse(suggestions));
+    @Autowired
+    public SuggestionController(SuggestionService suggestionService) {
+        this.suggestionService = suggestionService;
     }
     
-    @GetMapping("/next")
-    public ResponseEntity<SuggestionDto> getNextSuggestion(
-            @RequestParam UUID profileId,
-            @RequestParam SpendingCategory category,
-            @RequestParam(defaultValue = "PROVEN") SuggestionMode mode) {
-        
-        log.info("Getting next suggestion for profile {} with category {}, mode {}", profileId, category, mode);
-        
-        return suggestionService.getNextSuggestion(profileId, category, mode)
-            .map(ResponseEntity::ok)
-            .orElse(ResponseEntity.noContent().build());
+    @GetMapping("/{sessionId}")
+    public ResponseEntity<SuggestionsResponse> getSuggestions(@PathVariable String sessionId) {
+        try {
+            List<BucketListSuggestion> suggestions = suggestionService.getSuggestions(sessionId);
+            
+            if (suggestions.isEmpty()) {
+                suggestions = suggestionService.generateSuggestionsForPerson(sessionId);
+            }
+            
+            List<SuggestionDto> dtos = suggestions.stream().map(this::toDto).toList();
+            return ResponseEntity.ok(new SuggestionsResponse(dtos));
+            
+        } catch (IllegalStateException e) {
+            if (e.getMessage().contains("API key")) {
+                return ResponseEntity.status(401).build(); // Unauthorized - API key required
+            }
+            return ResponseEntity.badRequest().build();
+        } catch (Exception e) {
+            return ResponseEntity.status(500).build();
+        }
     }
     
-    @PostMapping("/feedback")
-    public ResponseEntity<Void> submitFeedback(@Valid @RequestBody FeedbackRequest request) {
-        log.info("Submitting feedback for suggestion {} from profile {}", 
-                request.suggestionId(), request.profileId());
-        
-        suggestionService.recordFeedback(
-            request.profileId(),
-            request.suggestionId(),
-            request.verdict(),
-            request.reason()
+    @PostMapping("/accept")
+    public ResponseEntity<Void> acceptSuggestion(@RequestBody AcceptRequest request) {
+        suggestionService.acceptSuggestion(request.getSessionId(), request.getSuggestionId());
+        return ResponseEntity.ok().build();
+    }
+    
+    @PostMapping("/reject")
+    public ResponseEntity<Void> rejectSuggestion(@RequestBody RejectRequest request) {
+        RejectionFeedback feedback = new RejectionFeedback(
+            request.getSuggestionId(), 
+            request.getReason(), 
+            request.isCustomReason()
+        );
+        suggestionService.rejectSuggestion(request.getSessionId(), feedback);
+        return ResponseEntity.ok().build();
+    }
+    
+    @GetMapping("/accepted/{sessionId}")
+    public ResponseEntity<SuggestionsResponse> getAcceptedSuggestions(@PathVariable String sessionId) {
+        List<BucketListSuggestion> suggestions = suggestionService.getAcceptedSuggestions(sessionId);
+        List<SuggestionDto> dtos = suggestions.stream().map(this::toDto).toList();
+        return ResponseEntity.ok(new SuggestionsResponse(dtos));
+    }
+    
+    @GetMapping("/rejected/{sessionId}")
+    public ResponseEntity<SuggestionsResponse> getRejectedSuggestions(@PathVariable String sessionId) {
+        List<BucketListSuggestion> suggestions = suggestionService.getRejectedSuggestions(sessionId);
+        List<SuggestionDto> dtos = suggestions.stream().map(this::toDto).toList();
+        return ResponseEntity.ok(new SuggestionsResponse(dtos));
+    }
+    
+    private SuggestionDto toDto(BucketListSuggestion suggestion) {
+        PriceBreakdownDto priceDto = new PriceBreakdownDto(
+            suggestion.getPriceBreakdown().getLineItems().stream()
+                .map(li -> new LineItemDto(li.getName(), li.getPrice(), li.getDescription()))
+                .toList(),
+            suggestion.getPriceBreakdown().getCurrency(),
+            suggestion.getPriceBreakdown().getTotalCost()
         );
         
-        return ResponseEntity.noContent().build();
+        return new SuggestionDto(
+            suggestion.getId(),
+            suggestion.getTitle(),
+            suggestion.getDescription(),
+            suggestion.getCategory().getDisplayName(),
+            priceDto,
+            suggestion.getRejectionReasons()
+        );
     }
     
-    @GetMapping("/accepted")
-    public ResponseEntity<List<SuggestionDto>> getAcceptedSuggestions(@RequestParam UUID profileId) {
-        log.info("Getting accepted suggestions for profile {}", profileId);
+    public static class SuggestionDto {
+        private String id;
+        private String title;
+        private String description;
+        private String category;
+        private PriceBreakdownDto priceBreakdown;
+        private List<String> rejectionReasons;
         
-        List<SuggestionDto> accepted = suggestionService.getAcceptedSuggestions(profileId);
-        return ResponseEntity.ok(accepted);
+        public SuggestionDto(String id, String title, String description, String category, 
+                           PriceBreakdownDto priceBreakdown, List<String> rejectionReasons) {
+            this.id = id;
+            this.title = title;
+            this.description = description;
+            this.category = category;
+            this.priceBreakdown = priceBreakdown;
+            this.rejectionReasons = rejectionReasons;
+        }
+        
+        public String getId() { return id; }
+        public void setId(String id) { this.id = id; }
+        
+        public String getTitle() { return title; }
+        public void setTitle(String title) { this.title = title; }
+        
+        public String getDescription() { return description; }
+        public void setDescription(String description) { this.description = description; }
+        
+        public String getCategory() { return category; }
+        public void setCategory(String category) { this.category = category; }
+        
+        public PriceBreakdownDto getPriceBreakdown() { return priceBreakdown; }
+        public void setPriceBreakdown(PriceBreakdownDto priceBreakdown) { this.priceBreakdown = priceBreakdown; }
+        
+        public List<String> getRejectionReasons() { return rejectionReasons; }
+        public void setRejectionReasons(List<String> rejectionReasons) { this.rejectionReasons = rejectionReasons; }
     }
     
-    @GetMapping("/rejected")
-    public ResponseEntity<List<RejectedSuggestionDto>> getRejectedSuggestions(@RequestParam UUID profileId) {
-        log.info("Getting rejected suggestions for profile {}", profileId);
+    public static class SuggestionsResponse {
+        private List<SuggestionDto> suggestions;
         
-        List<RejectedSuggestionDto> rejected = suggestionService.getRejectedSuggestions(profileId);
-        return ResponseEntity.ok(rejected);
+        public SuggestionsResponse(List<SuggestionDto> suggestions) {
+            this.suggestions = suggestions;
+        }
+        
+        public List<SuggestionDto> getSuggestions() { return suggestions; }
+        public void setSuggestions(List<SuggestionDto> suggestions) { this.suggestions = suggestions; }
+    }
+    
+    public static class AcceptRequest {
+        private String sessionId;
+        private String suggestionId;
+        
+        public String getSessionId() { return sessionId; }
+        public void setSessionId(String sessionId) { this.sessionId = sessionId; }
+        
+        public String getSuggestionId() { return suggestionId; }
+        public void setSuggestionId(String suggestionId) { this.suggestionId = suggestionId; }
+    }
+    
+    public static class PriceBreakdownDto {
+        private List<LineItemDto> lineItems;
+        private String currency;
+        private java.math.BigDecimal totalCost;
+        
+        public PriceBreakdownDto(List<LineItemDto> lineItems, String currency, java.math.BigDecimal totalCost) {
+            this.lineItems = lineItems;
+            this.currency = currency;
+            this.totalCost = totalCost;
+        }
+        
+        public List<LineItemDto> getLineItems() { return lineItems; }
+        public void setLineItems(List<LineItemDto> lineItems) { this.lineItems = lineItems; }
+        
+        public String getCurrency() { return currency; }
+        public void setCurrency(String currency) { this.currency = currency; }
+        
+        public java.math.BigDecimal getTotalCost() { return totalCost; }
+        public void setTotalCost(java.math.BigDecimal totalCost) { this.totalCost = totalCost; }
+    }
+    
+    public static class LineItemDto {
+        private String name;
+        private java.math.BigDecimal price;
+        private String description;
+        
+        public LineItemDto(String name, java.math.BigDecimal price, String description) {
+            this.name = name;
+            this.price = price;
+            this.description = description;
+        }
+        
+        public String getName() { return name; }
+        public void setName(String name) { this.name = name; }
+        
+        public java.math.BigDecimal getPrice() { return price; }
+        public void setPrice(java.math.BigDecimal price) { this.price = price; }
+        
+        public String getDescription() { return description; }
+        public void setDescription(String description) { this.description = description; }
+    }
+    
+    public static class RejectRequest {
+        private String sessionId;
+        private String suggestionId;
+        private String reason;
+        private boolean customReason;
+        
+        public String getSessionId() { return sessionId; }
+        public void setSessionId(String sessionId) { this.sessionId = sessionId; }
+        
+        public String getSuggestionId() { return suggestionId; }
+        public void setSuggestionId(String suggestionId) { this.suggestionId = suggestionId; }
+        
+        public String getReason() { return reason; }
+        public void setReason(String reason) { this.reason = reason; }
+        
+        public boolean isCustomReason() { return customReason; }
+        public void setCustomReason(boolean customReason) { this.customReason = customReason; }
     }
 }

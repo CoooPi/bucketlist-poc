@@ -1,87 +1,137 @@
-import type { CreateProfileRequest, CreateProfileResponse, Suggestion, FeedbackRequest, RejectedSuggestion } from '../types';
-import type { SpendingCategory, SuggestionMode } from '../types/categories';
+import type {
+  BucketListSuggestion,
+  SessionResponse,
+  SuggestionsResponse,
+  PersonDescriptionRequest,
+  AcceptRequest,
+  RejectRequest
+} from '../types';
 
-const API_BASE = 'http://localhost:8080/api';
+const API_BASE_URL = 'http://localhost:8080/api';
 
-export const api = {
-  async createProfile(request: CreateProfileRequest): Promise<CreateProfileResponse> {
-    const response = await fetch(`${API_BASE}/profile`, {
+class ApiService {
+  async createSession(personDescription: string): Promise<SessionResponse> {
+    const response = await fetch(`${API_BASE_URL}/session/create`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(request),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ personDescription } as PersonDescriptionRequest),
     });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to create profile: ${response.statusText}`);
-    }
-    
-    return response.json();
-  },
 
-  async getNextSuggestion(profileId: string, category: SpendingCategory, mode: SuggestionMode): Promise<Suggestion | null> {
-    const response = await fetch(`${API_BASE}/suggestions/next?profileId=${profileId}&category=${category}&mode=${mode}`);
-    
-    if (response.status === 204) {
-      return null; // No suggestions available
-    }
-    
     if (!response.ok) {
-      throw new Error(`Failed to get suggestion: ${response.statusText}`);
+      throw new Error('Failed to create session');
     }
-    
-    return response.json();
-  },
 
-  async refillSuggestions(profileId: string, category: SpendingCategory, mode: SuggestionMode, batchSize: number = 5): Promise<Suggestion[]> {
-    const response = await fetch(`${API_BASE}/suggestions/refill?profileId=${profileId}&category=${category}&mode=${mode}`, {
+    return response.json();
+  }
+
+  async getSuggestions(sessionId: string): Promise<BucketListSuggestion[]> {
+    const response = await fetch(`${API_BASE_URL}/suggestions/${sessionId}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    if (response.status === 401) {
+      throw new Error('API key required - please configure your OpenAI API key');
+    }
+
+    if (!response.ok) {
+      throw new Error('Failed to get suggestions');
+    }
+
+    const data: SuggestionsResponse = await response.json();
+    return data.suggestions;
+  }
+
+  async acceptSuggestion(sessionId: string, suggestionId: string): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/suggestions/accept`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ batchSize }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId, suggestionId } as AcceptRequest),
     });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to refill suggestions: ${response.statusText}`);
-    }
-    
-    const result = await response.json();
-    return result.suggestions || result.added; // Handle different response formats
-  },
 
-  async submitFeedback(feedback: FeedbackRequest): Promise<void> {
-    const response = await fetch(`${API_BASE}/suggestions/feedback`, {
+    if (!response.ok) {
+      throw new Error('Failed to accept suggestion');
+    }
+  }
+
+  async rejectSuggestion(
+    sessionId: string,
+    suggestionId: string,
+    reason: string,
+    customReason: boolean
+  ): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/suggestions/reject`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(feedback),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        sessionId, 
+        suggestionId, 
+        reason, 
+        customReason 
+      } as RejectRequest),
     });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to submit feedback: ${response.statusText}`);
-    }
-  },
 
-  async getAcceptedSuggestions(profileId: string): Promise<Suggestion[]> {
-    const response = await fetch(`${API_BASE}/suggestions/accepted?profileId=${profileId}`);
-    
     if (!response.ok) {
-      throw new Error(`Failed to get accepted suggestions: ${response.statusText}`);
+      throw new Error('Failed to reject suggestion');
     }
-    
-    return response.json();
-  },
+  }
 
-  async getRejectedSuggestions(profileId: string): Promise<RejectedSuggestion[]> {
-    const response = await fetch(`${API_BASE}/suggestions/rejected?profileId=${profileId}`);
-    
+  async getAcceptedSuggestions(sessionId: string): Promise<BucketListSuggestion[]> {
+    const response = await fetch(`${API_BASE_URL}/suggestions/accepted/${sessionId}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    });
+
     if (!response.ok) {
-      throw new Error(`Failed to get rejected suggestions: ${response.statusText}`);
+      throw new Error('Failed to get accepted suggestions');
     }
-    
-    return response.json();
-  },
-};
+
+    const data: SuggestionsResponse = await response.json();
+    return data.suggestions;
+  }
+
+  async getRejectedSuggestions(sessionId: string): Promise<BucketListSuggestion[]> {
+    const response = await fetch(`${API_BASE_URL}/suggestions/rejected/${sessionId}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to get rejected suggestions');
+    }
+
+    const data: SuggestionsResponse = await response.json();
+    return data.suggestions;
+  }
+
+  async checkApiKeyStatus(): Promise<boolean> {
+    const response = await fetch(`${API_BASE_URL}/config/api-key/status`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to check API key status');
+    }
+
+    const data = await response.json();
+    return data.hasValidKey;
+  }
+
+  async submitApiKey(apiKey: string): Promise<boolean> {
+    const response = await fetch(`${API_BASE_URL}/config/api-key`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ apiKey }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to validate API key');
+    }
+
+    const data = await response.json();
+    return data.valid;
+  }
+}
+
+export const apiService = new ApiService();

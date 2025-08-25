@@ -1,7 +1,8 @@
 #!/bin/bash
 
 # Bucket List Generator - Quick Start Script
-# Usage: ./run.sh YOUR_OPENAI_API_KEY
+# Usage: ./run.sh [YOUR_OPENAI_API_KEY]
+# Note: API key is now optional - you can provide it through the frontend
 
 set -e
 
@@ -12,14 +13,8 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Check if API key is provided
-if [ $# -eq 0 ]; then
-    echo -e "${RED}Error: OpenAI API key is required${NC}"
-    echo "Usage: ./run.sh YOUR_OPENAI_API_KEY"
-    exit 1
-fi
-
-OPENAI_API_KEY=$1
+# API key is now optional
+OPENAI_API_KEY=${1:-""}
 
 echo -e "${BLUE}🚀 Starting Bucket List Generator...${NC}"
 echo ""
@@ -88,7 +83,12 @@ fi
 # Start backend
 echo -e "${YELLOW}🔧 Starting backend server...${NC}"
 cd ../backend
-export OPENAI_API_KEY=$OPENAI_API_KEY
+if [ ! -z "$OPENAI_API_KEY" ]; then
+    export OPENAI_API_KEY=$OPENAI_API_KEY
+    echo -e "${GREEN}✅ Using provided API key${NC}"
+else
+    echo -e "${YELLOW}ℹ️  No API key provided - will be set through frontend${NC}"
+fi
 
 # Start backend in background
 ./gradlew bootRun > backend.log 2>&1 &
@@ -140,6 +140,12 @@ echo ""
 echo -e "${BLUE}📱 Frontend:${NC} http://localhost:5173"
 echo -e "${BLUE}🔧 Backend API:${NC} http://localhost:8080"
 echo -e "${BLUE}📊 Health Check:${NC} http://localhost:8080/actuator/health"
+echo ""
+if [ -z "$OPENAI_API_KEY" ]; then
+    echo -e "${YELLOW}💡 You'll need to enter your OpenAI API key in the frontend to use the application${NC}"
+else
+    echo -e "${GREEN}✅ OpenAI API key is configured${NC}"
+fi
 echo ""
 echo -e "${YELLOW}Press Ctrl+C to stop all servers${NC}"
 echo ""

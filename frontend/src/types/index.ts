@@ -1,47 +1,44 @@
-export type Gender = "MALE" | "FEMALE" | "OTHER" | "UNSPECIFIED";
-export type Mode = "CREATIVE" | "ALIGNED";
-export type PriceBand = "LOW" | "MEDIUM" | "HIGH";
-export type Category = "TRAVEL" | "ADVENTURE" | "LEARNING" | "WELLNESS" | "FAMILY" | "OTHER";
-export type Verdict = "ACCEPT" | "REJECT";
-
-export interface CreateProfileRequest {
-  gender: Gender;
-  age: number;
-  capital: number;
+export interface LineItem {
+  name: string;
+  price: number;
+  description: string;
 }
 
-export interface CreateProfileResponse {
-  profileId: string;
-  profileSummary: string;
-  capital: number;
+export interface PriceBreakdown {
+  lineItems: LineItem[];
+  currency: string;
+  totalCost: number;
 }
 
-export interface Suggestion {
+export interface BucketListSuggestion {
   id: string;
   title: string;
   description: string;
-  priceBand: PriceBand;
-  budgetBreakdown: BudgetItem[];
-}
-
-export interface RejectedSuggestion {
-  id: string;
-  title: string;
-  description: string;
-  budgetBreakdown: BudgetItem[];
-  reason?: string;
-  rejectedAt: string;
-}
-
-export interface BudgetItem {
   category: string;
-  description: string;
-  amount: number;
+  priceBreakdown: PriceBreakdown;
+  rejectionReasons: string[];
 }
 
-export interface FeedbackRequest {
-  profileId: string;
+export interface SessionResponse {
+  sessionId: string;
+}
+
+export interface SuggestionsResponse {
+  suggestions: BucketListSuggestion[];
+}
+
+export interface PersonDescriptionRequest {
+  personDescription: string;
+}
+
+export interface AcceptRequest {
+  sessionId: string;
   suggestionId: string;
-  verdict: Verdict;
-  reason?: string;
+}
+
+export interface RejectRequest {
+  sessionId: string;
+  suggestionId: string;
+  reason: string;
+  customReason: boolean;
 }
