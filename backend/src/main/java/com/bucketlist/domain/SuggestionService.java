@@ -7,12 +7,16 @@ import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.ai.converter.BeanOutputConverter;
 import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class SuggestionService {
+    
+    private static final Logger logger = LoggerFactory.getLogger(SuggestionService.class);
     
     private final ApiKeyService apiKeyService;
     private final PersonSessionService sessionService;
@@ -21,6 +25,7 @@ public class SuggestionService {
     private final Map<String, List<BucketListSuggestion>> sessionSuggestions = new ConcurrentHashMap<>();
     private final Map<String, Set<String>> acceptedSuggestions = new ConcurrentHashMap<>();
     private final Map<String, Map<String, RejectionFeedback>> rejectedSuggestions = new ConcurrentHashMap<>();
+    private final Map<String, Set<String>> reviewedSuggestions = new ConcurrentHashMap<>();
     
     @Autowired
     public SuggestionService(ApiKeyService apiKeyService, PersonSessionService sessionService) {
@@ -94,11 +99,13 @@ public class SuggestionService {
     
     public void acceptSuggestion(String sessionId, String suggestionId) {
         acceptedSuggestions.computeIfAbsent(sessionId, k -> new HashSet<>()).add(suggestionId);
+        reviewedSuggestions.computeIfAbsent(sessionId, k -> new HashSet<>()).add(suggestionId);
     }
     
     public void rejectSuggestion(String sessionId, RejectionFeedback feedback) {
         rejectedSuggestions.computeIfAbsent(sessionId, k -> new HashMap<>())
             .put(feedback.getSuggestionId(), feedback);
+        reviewedSuggestions.computeIfAbsent(sessionId, k -> new HashSet<>()).add(feedback.getSuggestionId());
     }
     
     public List<BucketListSuggestion> getAcceptedSuggestions(String sessionId) {
@@ -115,36 +122,222 @@ public class SuggestionService {
             .toList();
     }
     
+    public Optional<BucketListSuggestion> getNextUnreviewedSuggestion(String sessionId) {
+        List<BucketListSuggestion> suggestions = getSuggestions(sessionId);
+        Set<String> reviewed = reviewedSuggestions.getOrDefault(sessionId, Set.of());
+        
+        return suggestions.stream()
+            .filter(s -> !reviewed.contains(s.getId()))
+            .findFirst();
+    }
+    
+    public boolean shouldRegenerateWithFeedback(String sessionId) {
+        List<BucketListSuggestion> suggestions = getSuggestions(sessionId);
+        Set<String> reviewed = reviewedSuggestions.getOrDefault(sessionId, Set.of());
+        
+        // Regenerate if all current suggestions have been reviewed
+        return !suggestions.isEmpty() && reviewed.size() >= suggestions.size();
+    }
+    
+    public List<BucketListSuggestion> regenerateSuggestionsWithFeedback(String sessionId) {
+        Optional<PersonSession> sessionOpt = sessionService.getSession(sessionId);
+        if (sessionOpt.isEmpty()) {
+            throw new IllegalArgumentException("Invalid session ID");
+        }
+        
+        if (!apiKeyService.hasValidApiKey()) {
+            throw new IllegalStateException("API key not configured");
+        }
+        
+        PersonSession session = sessionOpt.get();
+        
+        try {
+            String prompt = buildRegenerationPrompt(sessionId, session.getPersonDescription());
+            String content;
+            
+            ChatClient chatClient = apiKeyService.getValidatedChatClient();
+            if (chatClient != null) {
+                BeanOutputConverter<SuggestionResponse> outputConverter = 
+                    new BeanOutputConverter<>(SuggestionResponse.class);
+                PromptTemplate promptTemplate = new PromptTemplate(prompt + "\n\n{format}");
+                Prompt chatPrompt = promptTemplate.create(Map.of("format", outputConverter.getFormat()));
+                content = chatClient.prompt(chatPrompt).call().content();
+                
+                SuggestionResponse suggestionResponse = outputConverter.convert(content);
+                List<BucketListSuggestion> suggestions = convertToSuggestions(suggestionResponse);
+                
+                // Replace old suggestions with new ones and clear review tracking for new batch
+                sessionSuggestions.put(sessionId, suggestions);
+                reviewedSuggestions.put(sessionId, new HashSet<>());
+                
+                return suggestions;
+            } else {
+                content = apiKeyService.callOpenAiDirectly(prompt + 
+                    "\n\nRespond with valid JSON in this exact format:\n" +
+                    "{\n" +
+                    "  \"suggestions\": [\n" +
+                    "    {\n" +
+                    "      \"title\": \"suggestion title\",\n" +
+                    "      \"description\": \"detailed description\",\n" +
+                    "      \"category\": \"one of the allowed categories\",\n" +
+                    "      \"priceBreakdown\": {\n" +
+                    "        \"lineItems\": [\n" +
+                    "          {\"name\": \"item name\", \"price\": 100.00, \"description\": \"item description\"}\n" +
+                    "        ],\n" +
+                    "        \"currency\": \"USD\"\n" +
+                    "      },\n" +
+                    "      \"rejectionReasons\": [\"reason1\", \"reason2\", \"reason3\", \"reason4\", \"reason5\"]\n" +
+                    "    }\n" +
+                    "  ]\n" +
+                    "}");
+                
+                List<BucketListSuggestion> suggestions = parseSimpleSuggestions(content);
+                
+                // Replace old suggestions with new ones and clear review tracking for new batch
+                sessionSuggestions.put(sessionId, suggestions);
+                reviewedSuggestions.put(sessionId, new HashSet<>());
+                
+                return suggestions;
+            }
+            
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to regenerate suggestions: " + e.getMessage(), e);
+        }
+    }
+    
     private String buildSuggestionPrompt(String personDescription) {
         return String.format("""
             You are generating bucket list suggestions for a person based on this description: %s
             
-            STRICT REQUIREMENTS:
-            1. Generate exactly 5 suggestions
-            2. Use only these categories: %s
-            3. CRITICAL: Each suggestion MUST use a DIFFERENT category - no two suggestions can share the same category
-            4. Vary creativity levels (some safe, some adventurous)
-            5. Include exactly 5 specific rejection reasons for each suggestion
-            6. Each suggestion must be realistic and achievable
-            7. PRICING: Provide detailed cost breakdown with line items
-            8. CURRENCY: Infer the person's nationality/location from their description and use the appropriate currency (USD for Americans, EUR for Europeans, GBP for British, CAD for Canadians, etc.)
-            9. Each price breakdown must include 2-5 realistic line items with specific costs
-            10. Line items should be detailed (e.g., "Flight to Paris", "3-night hotel stay", "Museum tickets", "Local meals")
+            BUDGET SCALING: Analyze the description for budget level and scale accordingly:
+            - HIGH BUDGET: Premium/luxury experiences (%%1000-10000+), include 1-2 stretch goals at 70%%%% budget
+            - MEDIUM BUDGET: Balanced aspirational suggestions (%%200-2000), include stretch goals up to %%5000
+            - LOW BUDGET: Accessible local experiences (%%25-500), include 1 stretch goal up to %%1200
             
-            CATEGORY VALIDATION: Before finalizing your response, verify that all 5 suggestions use different categories from: %s
+            REQUIREMENTS:
+            1. Generate exactly 5 suggestions using different categories: %s
+            2. Category field must EXACTLY match display names: %s
+            3. Scale pricing to inferred budget level with detailed cost breakdowns
+            4. Include 5 rejection reasons per suggestion
+            5. Infer currency from location (USD/EUR/GBP/CAD)
+            6. Validate all categories are unique and match: %s
             
             {format}
             """, 
             personDescription,
-            Arrays.toString(SpendingCategory.values()),
-            Arrays.toString(SpendingCategory.values())
-        );
+            getDisplayNamesString(),
+            getDisplayNamesString(),
+            getDisplayNamesString()
+        ).replace("%%", "$");
+    }
+    
+    private String getDisplayNamesString() {
+        return Arrays.stream(SpendingCategory.values())
+                .map(SpendingCategory::getDisplayName)
+                .collect(java.util.stream.Collectors.joining(", "));
+    }
+    
+    private String buildRegenerationPrompt(String sessionId, String personDescription) {
+        StringBuilder feedbackSection = new StringBuilder();
+        
+        // Get accepted suggestions
+        List<BucketListSuggestion> accepted = getAcceptedSuggestions(sessionId);
+        if (!accepted.isEmpty()) {
+            feedbackSection.append("PREVIOUSLY ACCEPTED SUGGESTIONS (the user liked these):\n");
+            for (BucketListSuggestion suggestion : accepted) {
+                feedbackSection.append(String.format("- %s (%s): %s\n", 
+                    suggestion.getTitle(), 
+                    suggestion.getCategory().getDisplayName(), 
+                    suggestion.getDescription()));
+            }
+            feedbackSection.append("\n");
+        }
+        
+        // Get rejected suggestions with reasons
+        List<BucketListSuggestion> rejected = getRejectedSuggestions(sessionId);
+        Map<String, RejectionFeedback> rejectionMap = rejectedSuggestions.getOrDefault(sessionId, Map.of());
+        if (!rejected.isEmpty()) {
+            feedbackSection.append("PREVIOUSLY REJECTED SUGGESTIONS (the user disliked these):\n");
+            for (BucketListSuggestion suggestion : rejected) {
+                RejectionFeedback feedback = rejectionMap.get(suggestion.getId());
+                String reason = feedback != null ? feedback.getReason() : "No reason provided";
+                feedbackSection.append(String.format("- %s (%s): %s | REJECTION REASON: %s\n", 
+                    suggestion.getTitle(), 
+                    suggestion.getCategory().getDisplayName(), 
+                    suggestion.getDescription(),
+                    reason));
+            }
+            feedbackSection.append("\n");
+        }
+        
+        return String.format("""
+            You are generating NEW bucket list suggestions for a person. This is a REGENERATION based on previous feedback.
+            
+            PERSON DESCRIPTION: %s
+            
+            %s
+            BUDGET SCALING: Re-analyze description and feedback patterns for budget level:
+            - HIGH BUDGET: Premium experiences (%%1000-10000+), stretch goals at 70%%%% budget
+            - MEDIUM BUDGET: Balanced suggestions (%%200-2000), stretch goals up to %%5000
+            - LOW BUDGET: Accessible experiences (%%25-500), stretch goal up to %%1200
+            - Adjust budget assessment based on accepted/rejected pricing patterns
+            
+            LEARNING: Use feedback to generate better personalized suggestions. Avoid rejected patterns, align with accepted preferences.
+            
+            REQUIREMENTS:
+            1. Generate 5 NEW suggestions using different categories: %s
+            2. Category field must EXACTLY match display names: %s  
+            3. Scale pricing to budget level with detailed breakdowns
+            4. Include 5 rejection reasons per suggestion
+            5. Infer currency from location
+            6. Validate categories are unique and match: %s
+            
+            {format}
+            """, 
+            personDescription,
+            feedbackSection.toString(),
+            getDisplayNamesString(),
+            getDisplayNamesString(),
+            getDisplayNamesString()
+        ).replace("%%", "$");
     }
     
     private List<BucketListSuggestion> convertToSuggestions(SuggestionResponse response) {
-        return response.getSuggestions().stream()
+        List<BucketListSuggestion> suggestions = response.getSuggestions().stream()
             .map(this::convertToSuggestion)
             .toList();
+            
+        validateCategoryDiversity(suggestions);
+        return suggestions;
+    }
+    
+    private void validateCategoryDiversity(List<BucketListSuggestion> suggestions) {
+        Map<SpendingCategory, Long> categoryCount = suggestions.stream()
+            .collect(java.util.stream.Collectors.groupingBy(
+                BucketListSuggestion::getCategory,
+                java.util.stream.Collectors.counting()
+            ));
+            
+        logger.info("Generated suggestions category distribution: {}", categoryCount);
+        
+        // Check for duplicates
+        List<SpendingCategory> duplicateCategories = categoryCount.entrySet().stream()
+            .filter(entry -> entry.getValue() > 1)
+            .map(Map.Entry::getKey)
+            .toList();
+            
+        if (!duplicateCategories.isEmpty()) {
+            logger.warn("Found duplicate categories in suggestions: {}. This may indicate AI prompt issues.", duplicateCategories);
+        }
+        
+        // Check if we have the expected number of different categories
+        if (categoryCount.size() < suggestions.size()) {
+            logger.warn("Expected {} different categories but got {}. Category diversity requirement not met.", 
+                       suggestions.size(), categoryCount.size());
+        } else {
+            logger.info("Category diversity validation passed: {} suggestions with {} different categories", 
+                       suggestions.size(), categoryCount.size());
+        }
     }
     
     private BucketListSuggestion convertToSuggestion(SuggestionResponse.SuggestionItem item) {
@@ -161,12 +354,37 @@ public class SuggestionService {
     }
     
     private SpendingCategory findCategoryByDisplayName(String displayName) {
+        if (displayName == null || displayName.trim().isEmpty()) {
+            logger.warn("Category display name is null or empty, falling back to SMALL_LUXURY");
+            return SpendingCategory.SMALL_LUXURY;
+        }
+        
+        String trimmedDisplayName = displayName.trim();
+        logger.debug("Attempting to match category: '{}'", trimmedDisplayName);
+        
+        // First try exact match (case insensitive)
         for (SpendingCategory category : SpendingCategory.values()) {
-            if (category.getDisplayName().equalsIgnoreCase(displayName)) {
+            if (category.getDisplayName().equalsIgnoreCase(trimmedDisplayName)) {
+                logger.debug("Found exact match: '{}' -> {}", trimmedDisplayName, category);
                 return category;
             }
         }
-        // Fallback to SMALL_LUXURY if no match found
+        
+        // Try partial matches or common variations
+        String lowerDisplayName = trimmedDisplayName.toLowerCase();
+        for (SpendingCategory category : SpendingCategory.values()) {
+            String categoryLower = category.getDisplayName().toLowerCase();
+            if (categoryLower.contains(lowerDisplayName) || lowerDisplayName.contains(categoryLower)) {
+                logger.debug("Found partial match: '{}' -> {}", trimmedDisplayName, category);
+                return category;
+            }
+        }
+        
+        // Log all available categories for debugging
+        String availableCategories = getDisplayNamesString();
+        logger.warn("No category match found for: '{}'. Available categories: [{}]. Falling back to SMALL_LUXURY", 
+                    trimmedDisplayName, availableCategories);
+        
         return SpendingCategory.SMALL_LUXURY;
     }
     
@@ -220,8 +438,10 @@ public class SuggestionService {
             }
         } catch (Exception e) {
             // If parsing fails, return empty list
+            logger.error("Failed to parse suggestions JSON", e);
         }
         
+        validateCategoryDiversity(suggestions);
         return suggestions;
     }
     

@@ -4,7 +4,7 @@ export function LoadingSuggestionCard() {
   return (
     <Card className="w-full max-w-md">
       <CardHeader>
-        <CardTitle className="text-xl">
+        <CardTitle className="text-xl text-center">
           Generating new suggestions...
         </CardTitle>
       </CardHeader>

@@ -7,11 +7,12 @@ import { Input } from './ui/input';
 
 interface SuggestionCardProps {
   suggestion: BucketListSuggestion;
+  disabled?: boolean;
   onAccept: () => void;
   onReject: (reason: string, isCustom: boolean) => void;
 }
 
-export function SuggestionCard({ suggestion, onAccept, onReject }: SuggestionCardProps) {
+export function SuggestionCard({ suggestion, disabled = false, onAccept, onReject }: SuggestionCardProps) {
   const [showRejectOptions, setShowRejectOptions] = useState(false);
   const [customReason, setCustomReason] = useState('');
   const [showCustomInput, setShowCustomInput] = useState(false);
@@ -85,13 +86,18 @@ export function SuggestionCard({ suggestion, onAccept, onReject }: SuggestionCar
         
         {!showRejectOptions ? (
           <div className="flex gap-2">
-            <Button onClick={onAccept} className="flex-1">
+            <Button 
+              onClick={onAccept} 
+              className="flex-1" 
+              disabled={disabled}
+            >
               Accept
             </Button>
             <Button 
               onClick={() => setShowRejectOptions(true)} 
               variant="outline" 
               className="flex-1"
+              disabled={disabled}
             >
               Reject
             </Button>
@@ -107,6 +113,7 @@ export function SuggestionCard({ suggestion, onAccept, onReject }: SuggestionCar
                   size="sm"
                   className="w-full text-left justify-start h-auto p-3"
                   onClick={() => handleRejectWithReason(reason)}
+                  disabled={disabled}
                 >
                   {reason}
                 </Button>
@@ -118,6 +125,7 @@ export function SuggestionCard({ suggestion, onAccept, onReject }: SuggestionCar
                   size="sm"
                   className="w-full"
                   onClick={() => setShowCustomInput(true)}
+                  disabled={disabled}
                 >
                   Other reason...
                 </Button>
@@ -129,7 +137,11 @@ export function SuggestionCard({ suggestion, onAccept, onReject }: SuggestionCar
                     onChange={(e) => setCustomReason(e.target.value)}
                   />
                   <div className="flex gap-2">
-                    <Button size="sm" onClick={handleCustomReject}>
+                    <Button 
+                      size="sm" 
+                      onClick={handleCustomReject}
+                      disabled={disabled}
+                    >
                       Submit
                     </Button>
                     <Button 
@@ -139,6 +151,7 @@ export function SuggestionCard({ suggestion, onAccept, onReject }: SuggestionCar
                         setShowCustomInput(false);
                         setCustomReason('');
                       }}
+                      disabled={disabled}
                     >
                       Cancel
                     </Button>
@@ -152,6 +165,7 @@ export function SuggestionCard({ suggestion, onAccept, onReject }: SuggestionCar
               size="sm"
               onClick={() => setShowRejectOptions(false)}
               className="w-full"
+              disabled={disabled}
             >
               Back
             </Button>

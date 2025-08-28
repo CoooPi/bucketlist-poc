@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/suggestions")
@@ -39,6 +40,8 @@ public class SuggestionController {
             }
             return ResponseEntity.badRequest().build();
         } catch (Exception e) {
+            System.err.println("Error generating suggestions: " + e.getMessage());
+            e.printStackTrace();
             return ResponseEntity.status(500).build();
         }
     }
@@ -72,6 +75,55 @@ public class SuggestionController {
         List<BucketListSuggestion> suggestions = suggestionService.getRejectedSuggestions(sessionId);
         List<SuggestionDto> dtos = suggestions.stream().map(this::toDto).toList();
         return ResponseEntity.ok(new SuggestionsResponse(dtos));
+    }
+    
+    @GetMapping("/next/{sessionId}")
+    public ResponseEntity<SuggestionDto> getNextSuggestion(@PathVariable String sessionId) {
+        try {
+            Optional<BucketListSuggestion> nextSuggestion = suggestionService.getNextUnreviewedSuggestion(sessionId);
+            
+            if (nextSuggestion.isEmpty()) {
+                // Check if we need to regenerate suggestions with feedback
+                if (suggestionService.shouldRegenerateWithFeedback(sessionId)) {
+                    List<BucketListSuggestion> newSuggestions = suggestionService.regenerateSuggestionsWithFeedback(sessionId);
+                    if (!newSuggestions.isEmpty()) {
+                        return ResponseEntity.ok(toDto(newSuggestions.get(0)));
+                    }
+                }
+                return ResponseEntity.notFound().build();
+            }
+            
+            return ResponseEntity.ok(toDto(nextSuggestion.get()));
+            
+        } catch (IllegalStateException e) {
+            if (e.getMessage().contains("API key")) {
+                return ResponseEntity.status(401).build();
+            }
+            return ResponseEntity.badRequest().build();
+        } catch (Exception e) {
+            System.err.println("Error generating suggestions: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(500).build();
+        }
+    }
+    
+    @PostMapping("/regenerate")
+    public ResponseEntity<SuggestionsResponse> regenerateSuggestions(@RequestBody RegenerateRequest request) {
+        try {
+            List<BucketListSuggestion> suggestions = suggestionService.regenerateSuggestionsWithFeedback(request.getSessionId());
+            List<SuggestionDto> dtos = suggestions.stream().map(this::toDto).toList();
+            return ResponseEntity.ok(new SuggestionsResponse(dtos));
+            
+        } catch (IllegalStateException e) {
+            if (e.getMessage().contains("API key")) {
+                return ResponseEntity.status(401).build();
+            }
+            return ResponseEntity.badRequest().build();
+        } catch (Exception e) {
+            System.err.println("Error generating suggestions: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(500).build();
+        }
     }
     
     private SuggestionDto toDto(BucketListSuggestion suggestion) {
@@ -211,5 +263,12 @@ public class SuggestionController {
         
         public boolean isCustomReason() { return customReason; }
         public void setCustomReason(boolean customReason) { this.customReason = customReason; }
+    }
+    
+    public static class RegenerateRequest {
+        private String sessionId;
+        
+        public String getSessionId() { return sessionId; }
+        public void setSessionId(String sessionId) { this.sessionId = sessionId; }
     }
 }

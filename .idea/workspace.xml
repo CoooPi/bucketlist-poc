@@ -5,46 +5,14 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="af1231b1-457c-4589-9541-53a064fee6d5" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/.gitattributes" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/bucketlist/api/BudgetItem.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/bucketlist/api/CreateProfileRequest.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/bucketlist/api/CreateProfileResponse.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/bucketlist/api/FeedbackRequest.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/bucketlist/api/ProfileController.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/bucketlist/api/RefillRequest.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/bucketlist/api/RefillResponse.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/bucketlist/api/RejectedSuggestionDto.java" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/bucketlist/api/SuggestionController.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/com/bucketlist/api/SuggestionController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/bucketlist/api/SuggestionDto.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/bucketlist/api/SuggestionFeedbackContext.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/bucketlist/domain/Category.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/bucketlist/domain/Gender.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/bucketlist/domain/Mode.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/bucketlist/domain/ProfileService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/bucketlist/domain/Suggestion.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/bucketlist/domain/SuggestionFeedback.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/bucketlist/domain/SuggestionMode.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/bucketlist/domain/ApiKeyService.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/com/bucketlist/domain/ApiKeyService.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/bucketlist/domain/SuggestionService.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/com/bucketlist/domain/SuggestionService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/bucketlist/domain/UserProfile.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/bucketlist/domain/Verdict.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/bucketlist/infra/OpenAIConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/com/bucketlist/infra/OpenAIConfig.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/bucketlist/infra/SuggestionFeedbackRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/bucketlist/infra/SuggestionRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/com/bucketlist/infra/UserProfileRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/resources/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/resources/application.properties" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/frontend/src/App.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/App.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/src/components/BucketListCard.tsx" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/src/components/CategorySelectionPage.tsx" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/src/components/FeedbackPopover.tsx" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/src/components/OnboardingForm.tsx" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/src/components/RejectedSuggestionsCard.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/components/LoadingSuggestionCard.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/components/LoadingSuggestionCard.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/components/PersonDescriptionInput.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/components/PersonDescriptionInput.tsx" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/frontend/src/components/SuggestionCard.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/components/SuggestionCard.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/src/components/SuggestionItemCard.tsx" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/frontend/src/services/api.ts" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/services/api.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/src/types/categories.ts" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/src/types/index.ts" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/types/index.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/run.sh" beforeDir="false" afterPath="$PROJECT_DIR$/run.sh" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -171,6 +139,7 @@
       <workItem from="1755764510095" duration="7000" />
       <workItem from="1755865836812" duration="1101000" />
       <workItem from="1755960644381" duration="242000" />
+      <workItem from="1756401668209" duration="285000" />
     </task>
     <servers />
   </component>

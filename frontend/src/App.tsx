@@ -1,19 +1,22 @@
 import { useState } from 'react';
 import { PersonDescriptionInput } from './components/PersonDescriptionInput';
-import { SuggestionGrid } from './components/SuggestionGrid';
+import { SingleSuggestionView } from './components/SingleSuggestionView';
 import { ApiKeyGuard } from './components/ApiKeyGuard';
 import { Card, CardContent } from './components/ui/card';
 import { Button } from './components/ui/button';
 import type { BucketListSuggestion } from './types';
 import { apiService } from './services/api';
 
-type AppState = 'input' | 'suggestions' | 'loading' | 'error';
+type AppState = 'input' | 'suggestions' | 'loading' | 'error' | 'regenerating';
 
 function App() {
   const [state, setState] = useState<AppState>('input');
   const [sessionId, setSessionId] = useState<string>('');
-  const [suggestions, setSuggestions] = useState<BucketListSuggestion[]>([]);
+  const [currentSuggestion, setCurrentSuggestion] = useState<BucketListSuggestion | null>(null);
+  const [suggestionsReviewed, setSuggestionsReviewed] = useState<number>(0);
+  const [totalSuggestions] = useState<number>(5); // Each batch has 5 suggestions
   const [error, setError] = useState<string>('');
+  const [loadingNext, setLoadingNext] = useState<boolean>(false);
 
   const handlePersonDescriptionSubmit = async (description: string) => {
     setState('loading');
@@ -23,9 +26,17 @@ function App() {
       const sessionResponse = await apiService.createSession(description);
       setSessionId(sessionResponse.sessionId);
       
-      const suggestionsData = await apiService.getSuggestions(sessionResponse.sessionId);
-      setSuggestions(suggestionsData);
-      setState('suggestions');
+      // Initialize suggestions and get the first one
+      await apiService.getSuggestions(sessionResponse.sessionId); // This generates the initial batch
+      const firstSuggestion = await apiService.getNextSuggestion(sessionResponse.sessionId);
+      
+      if (firstSuggestion) {
+        setCurrentSuggestion(firstSuggestion);
+        setSuggestionsReviewed(0);
+        setState('suggestions');
+      } else {
+        throw new Error('No suggestions were generated');
+      }
     } catch (err) {
       if (err instanceof Error && err.message.includes('Failed to get suggestions')) {
         // This might be an API key issue, let the ApiKeyGuard handle it
@@ -40,30 +51,63 @@ function App() {
     }
   };
 
+  const loadNextSuggestion = async () => {
+    setLoadingNext(true);
+    try {
+      const nextSuggestion = await apiService.getNextSuggestion(sessionId);
+      
+      if (nextSuggestion) {
+        setCurrentSuggestion(nextSuggestion);
+      } else {
+        // No more suggestions, need to regenerate
+        setState('regenerating');
+        const newSuggestions = await apiService.regenerateSuggestions(sessionId);
+        
+        if (newSuggestions.length > 0) {
+          const firstNewSuggestion = await apiService.getNextSuggestion(sessionId);
+          setCurrentSuggestion(firstNewSuggestion);
+          setSuggestionsReviewed(0); // Reset counter for new batch
+          setState('suggestions');
+        } else {
+          setCurrentSuggestion(null);
+          setState('suggestions');
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load next suggestion');
+      setState('error');
+    } finally {
+      setLoadingNext(false);
+    }
+  };
+
   const handleAcceptSuggestion = async (suggestionId: string) => {
     try {
       await apiService.acceptSuggestion(sessionId, suggestionId);
-      // Remove accepted suggestion from the list
-      setSuggestions(prev => prev.filter(s => s.id !== suggestionId));
+      setSuggestionsReviewed(prev => prev + 1);
+      await loadNextSuggestion();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to accept suggestion');
+      setState('error');
     }
   };
 
   const handleRejectSuggestion = async (suggestionId: string, reason: string, isCustom: boolean) => {
     try {
       await apiService.rejectSuggestion(sessionId, suggestionId, reason, isCustom);
-      // Remove rejected suggestion from the list
-      setSuggestions(prev => prev.filter(s => s.id !== suggestionId));
+      setSuggestionsReviewed(prev => prev + 1);
+      await loadNextSuggestion();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to reject suggestion');
+      setState('error');
     }
   };
 
   const resetApp = () => {
     setState('input');
     setSessionId('');
-    setSuggestions([]);
+    setCurrentSuggestion(null);
+    setSuggestionsReviewed(0);
     setError('');
   };
 
@@ -91,25 +135,18 @@ function App() {
           />
         )}
 
-        {state === 'suggestions' && (
-          <>
-            <SuggestionGrid
-              suggestions={suggestions}
-              onAcceptSuggestion={handleAcceptSuggestion}
-              onRejectSuggestion={handleRejectSuggestion}
-            />
-            {suggestions.length === 0 && (
-              <div className="text-center p-8">
-                <p className="text-gray-600 mb-4">All suggestions have been reviewed!</p>
-                <Button
-                  onClick={resetApp}
-                  variant="outline"
-                >
-                  Start over with a new person
-                </Button>
-              </div>
-            )}
-          </>
+        {(state === 'suggestions' || state === 'regenerating') && (
+          <SingleSuggestionView
+            currentSuggestion={currentSuggestion}
+            isLoading={false}
+            isRegenerating={state === 'regenerating'}
+            loadingNext={loadingNext}
+            suggestionsReviewed={suggestionsReviewed}
+            totalSuggestions={totalSuggestions}
+            onAcceptSuggestion={handleAcceptSuggestion}
+            onRejectSuggestion={handleRejectSuggestion}
+            onStartOver={resetApp}
+          />
         )}
 
         {state === 'error' && (

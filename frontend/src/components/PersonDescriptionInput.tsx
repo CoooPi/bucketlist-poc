@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Loader2 } from 'lucide-react';
 
 interface PersonDescriptionInputProps {
   onSubmit: (description: string) => void;
@@ -42,7 +43,14 @@ export function PersonDescriptionInput({ onSubmit, isLoading = false }: PersonDe
               className="w-full"
               disabled={!description.trim() || isLoading}
             >
-              {isLoading ? 'Generating Suggestions...' : 'Get Suggestions'}
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Generating Suggestions...
+                </>
+              ) : (
+                'Get Suggestions'
+              )}
             </Button>
           </form>
         </CardContent>

@@ -17,6 +17,18 @@ public class ApiKeyService {
     private String storedApiKey;
     private ChatClient validatedChatClient;
     
+    // Constructor to load API key from environment on startup
+    public ApiKeyService() {
+        String envApiKey = System.getenv("OPENAI_API_KEY");
+        if (envApiKey != null && !envApiKey.trim().isEmpty()) {
+            if (validateAndStoreApiKey(envApiKey)) {
+                System.out.println("Successfully loaded API key from OPENAI_API_KEY environment variable");
+            } else {
+                System.err.println("Invalid API key found in OPENAI_API_KEY environment variable");
+            }
+        }
+    }
+    
     public boolean validateAndStoreApiKey(String apiKey) {
         try {
             // Validate the API key by making a simple call to OpenAI API
@@ -105,11 +117,12 @@ public class ApiKeyService {
         headers.set("Authorization", "Bearer " + storedApiKey);
         headers.set("Content-Type", "application/json");
         
+        String escapedPrompt = escapeJsonString(prompt);
         String requestBody = String.format("{\n" +
             "  \"model\": \"gpt-4o\",\n" +
             "  \"messages\": [{\"role\": \"user\", \"content\": \"%s\"}],\n" +
             "  \"max_tokens\": 2000\n" +
-            "}", prompt.replace("\"", "\\\"").replace("\n", "\\n"));
+            "}", escapedPrompt);
         
         HttpEntity<String> entity = new HttpEntity<>(requestBody, headers);
         ResponseEntity<String> response = restTemplate.exchange(
@@ -131,5 +144,18 @@ public class ApiKeyService {
         } else {
             throw new Exception("OpenAI API call failed: " + response.getStatusCode());
         }
+    }
+    
+    private String escapeJsonString(String input) {
+        if (input == null) return null;
+        
+        return input
+            .replace("\\", "\\\\")  // Escape backslashes first
+            .replace("\"", "\\\"")  // Escape quotes
+            .replace("\n", "\\n")   // Escape newlines
+            .replace("\r", "\\r")   // Escape carriage returns
+            .replace("\t", "\\t")   // Escape tabs
+            .replace("\b", "\\b")   // Escape backspace
+            .replace("\f", "\\f");  // Escape form feed
     }
 }

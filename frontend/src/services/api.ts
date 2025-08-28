@@ -104,6 +104,46 @@ class ApiService {
     return data.suggestions;
   }
 
+  async getNextSuggestion(sessionId: string): Promise<BucketListSuggestion | null> {
+    const response = await fetch(`${API_BASE_URL}/suggestions/next/${sessionId}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    if (response.status === 404) {
+      return null; // No more suggestions available
+    }
+
+    if (response.status === 401) {
+      throw new Error('API key required - please configure your OpenAI API key');
+    }
+
+    if (!response.ok) {
+      throw new Error('Failed to get next suggestion');
+    }
+
+    return response.json();
+  }
+
+  async regenerateSuggestions(sessionId: string): Promise<BucketListSuggestion[]> {
+    const response = await fetch(`${API_BASE_URL}/suggestions/regenerate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId }),
+    });
+
+    if (response.status === 401) {
+      throw new Error('API key required - please configure your OpenAI API key');
+    }
+
+    if (!response.ok) {
+      throw new Error('Failed to regenerate suggestions');
+    }
+
+    const data: SuggestionsResponse = await response.json();
+    return data.suggestions;
+  }
+
   async checkApiKeyStatus(): Promise<boolean> {
     const response = await fetch(`${API_BASE_URL}/config/api-key/status`, {
       method: 'GET',
