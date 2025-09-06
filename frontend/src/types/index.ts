@@ -42,3 +42,12 @@ export interface RejectRequest {
   reason: string;
   customReason: boolean;
 }
+
+export interface RejectedBucketListSuggestion extends BucketListSuggestion {
+  rejectionReason: string;
+  isCustomReason: boolean;
+}
+
+export interface RejectedSuggestionsResponse {
+  suggestions: RejectedBucketListSuggestion[];
+}

@@ -1,5 +1,7 @@
 import type {
   BucketListSuggestion,
+  RejectedBucketListSuggestion,
+  RejectedSuggestionsResponse,
   SessionResponse,
   SuggestionsResponse,
   PersonDescriptionRequest,
@@ -90,7 +92,7 @@ class ApiService {
     return data.suggestions;
   }
 
-  async getRejectedSuggestions(sessionId: string): Promise<BucketListSuggestion[]> {
+  async getRejectedSuggestions(sessionId: string): Promise<RejectedBucketListSuggestion[]> {
     const response = await fetch(`${API_BASE_URL}/suggestions/rejected/${sessionId}`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
@@ -100,7 +102,7 @@ class ApiService {
       throw new Error('Failed to get rejected suggestions');
     }
 
-    const data: SuggestionsResponse = await response.json();
+    const data: RejectedSuggestionsResponse = await response.json();
     return data.suggestions;
   }
 

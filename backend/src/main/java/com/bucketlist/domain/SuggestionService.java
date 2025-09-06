@@ -122,6 +122,18 @@ public class SuggestionService {
             .toList();
     }
     
+    public String getRejectionReason(String sessionId, String suggestionId) {
+        Map<String, RejectionFeedback> rejected = rejectedSuggestions.getOrDefault(sessionId, Map.of());
+        RejectionFeedback feedback = rejected.get(suggestionId);
+        return feedback != null ? feedback.getReason() : "No reason provided";
+    }
+    
+    public boolean isCustomRejectionReason(String sessionId, String suggestionId) {
+        Map<String, RejectionFeedback> rejected = rejectedSuggestions.getOrDefault(sessionId, Map.of());
+        RejectionFeedback feedback = rejected.get(suggestionId);
+        return feedback != null && feedback.isCustomReason();
+    }
+    
     public Optional<BucketListSuggestion> getNextUnreviewedSuggestion(String sessionId) {
         List<BucketListSuggestion> suggestions = getSuggestions(sessionId);
         Set<String> reviewed = reviewedSuggestions.getOrDefault(sessionId, Set.of());

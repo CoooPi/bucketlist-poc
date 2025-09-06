@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { PersonDescriptionInput } from './components/PersonDescriptionInput';
-import { SingleSuggestionView } from './components/SingleSuggestionView';
+import { SuggestionHistoryLayout } from './components/SuggestionHistoryLayout';
 import { ApiKeyGuard } from './components/ApiKeyGuard';
 import { Card, CardContent } from './components/ui/card';
 import { Button } from './components/ui/button';
-import type { BucketListSuggestion } from './types';
+import type { BucketListSuggestion, RejectedBucketListSuggestion } from './types';
 import { apiService } from './services/api';
 
 type AppState = 'input' | 'suggestions' | 'loading' | 'error' | 'regenerating';
@@ -17,6 +17,24 @@ function App() {
   const [totalSuggestions] = useState<number>(5); // Each batch has 5 suggestions
   const [error, setError] = useState<string>('');
   const [loadingNext, setLoadingNext] = useState<boolean>(false);
+  
+  // New state for accepted and rejected suggestions
+  const [acceptedSuggestions, setAcceptedSuggestions] = useState<BucketListSuggestion[]>([]);
+  const [rejectedSuggestions, setRejectedSuggestions] = useState<RejectedBucketListSuggestion[]>([]);
+
+  const loadAcceptedAndRejectedSuggestions = async (sessionId: string) => {
+    try {
+      const [accepted, rejected] = await Promise.all([
+        apiService.getAcceptedSuggestions(sessionId),
+        apiService.getRejectedSuggestions(sessionId)
+      ]);
+      setAcceptedSuggestions(accepted);
+      setRejectedSuggestions(rejected);
+    } catch (err) {
+      console.error('Failed to load suggestion history:', err);
+      // Don't fail the whole operation, just continue without history
+    }
+  };
 
   const handlePersonDescriptionSubmit = async (description: string) => {
     setState('loading');
@@ -29,6 +47,9 @@ function App() {
       // Initialize suggestions and get the first one
       await apiService.getSuggestions(sessionResponse.sessionId); // This generates the initial batch
       const firstSuggestion = await apiService.getNextSuggestion(sessionResponse.sessionId);
+      
+      // Load any existing accepted/rejected suggestions (in case of page refresh)
+      await loadAcceptedAndRejectedSuggestions(sessionResponse.sessionId);
       
       if (firstSuggestion) {
         setCurrentSuggestion(firstSuggestion);
@@ -84,9 +105,17 @@ function App() {
   const handleAcceptSuggestion = async (suggestionId: string) => {
     try {
       await apiService.acceptSuggestion(sessionId, suggestionId);
+      
+      // Optimistically update the UI - add to accepted suggestions
+      if (currentSuggestion && currentSuggestion.id === suggestionId) {
+        setAcceptedSuggestions(prev => [...prev, currentSuggestion]);
+      }
+      
       setSuggestionsReviewed(prev => prev + 1);
       await loadNextSuggestion();
     } catch (err) {
+      // Revert optimistic update by reloading from server
+      await loadAcceptedAndRejectedSuggestions(sessionId);
       setError(err instanceof Error ? err.message : 'Failed to accept suggestion');
       setState('error');
     }
@@ -95,9 +124,22 @@ function App() {
   const handleRejectSuggestion = async (suggestionId: string, reason: string, isCustom: boolean) => {
     try {
       await apiService.rejectSuggestion(sessionId, suggestionId, reason, isCustom);
+      
+      // Optimistically update the UI - add to rejected suggestions
+      if (currentSuggestion && currentSuggestion.id === suggestionId) {
+        const rejectedSuggestion: RejectedBucketListSuggestion = {
+          ...currentSuggestion,
+          rejectionReason: reason,
+          isCustomReason: isCustom
+        };
+        setRejectedSuggestions(prev => [...prev, rejectedSuggestion]);
+      }
+      
       setSuggestionsReviewed(prev => prev + 1);
       await loadNextSuggestion();
     } catch (err) {
+      // Revert optimistic update by reloading from server
+      await loadAcceptedAndRejectedSuggestions(sessionId);
       setError(err instanceof Error ? err.message : 'Failed to reject suggestion');
       setState('error');
     }
@@ -109,6 +151,8 @@ function App() {
     setCurrentSuggestion(null);
     setSuggestionsReviewed(0);
     setError('');
+    setAcceptedSuggestions([]);
+    setRejectedSuggestions([]);
   };
 
   // Real API key functions
@@ -136,11 +180,13 @@ function App() {
         )}
 
         {(state === 'suggestions' || state === 'regenerating') && (
-          <SingleSuggestionView
+          <SuggestionHistoryLayout
             currentSuggestion={currentSuggestion}
             isLoading={false}
             isRegenerating={state === 'regenerating'}
             loadingNext={loadingNext}
+            acceptedSuggestions={acceptedSuggestions}
+            rejectedSuggestions={rejectedSuggestions}
             suggestionsReviewed={suggestionsReviewed}
             totalSuggestions={totalSuggestions}
             onAcceptSuggestion={handleAcceptSuggestion}

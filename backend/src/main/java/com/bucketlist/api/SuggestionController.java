@@ -71,10 +71,12 @@ public class SuggestionController {
     }
     
     @GetMapping("/rejected/{sessionId}")
-    public ResponseEntity<SuggestionsResponse> getRejectedSuggestions(@PathVariable String sessionId) {
+    public ResponseEntity<RejectedSuggestionsResponse> getRejectedSuggestions(@PathVariable String sessionId) {
         List<BucketListSuggestion> suggestions = suggestionService.getRejectedSuggestions(sessionId);
-        List<SuggestionDto> dtos = suggestions.stream().map(this::toDto).toList();
-        return ResponseEntity.ok(new SuggestionsResponse(dtos));
+        List<RejectedSuggestionDto> dtos = suggestions.stream()
+            .map(s -> toRejectedDto(s, sessionId))
+            .toList();
+        return ResponseEntity.ok(new RejectedSuggestionsResponse(dtos));
     }
     
     @GetMapping("/next/{sessionId}")
@@ -142,6 +144,31 @@ public class SuggestionController {
             suggestion.getCategory().getDisplayName(),
             priceDto,
             suggestion.getRejectionReasons()
+        );
+    }
+    
+    private RejectedSuggestionDto toRejectedDto(BucketListSuggestion suggestion, String sessionId) {
+        PriceBreakdownDto priceDto = new PriceBreakdownDto(
+            suggestion.getPriceBreakdown().getLineItems().stream()
+                .map(li -> new LineItemDto(li.getName(), li.getPrice(), li.getDescription()))
+                .toList(),
+            suggestion.getPriceBreakdown().getCurrency(),
+            suggestion.getPriceBreakdown().getTotalCost()
+        );
+        
+        // Get rejection feedback for this suggestion
+        String rejectionReason = suggestionService.getRejectionReason(sessionId, suggestion.getId());
+        boolean isCustomReason = suggestionService.isCustomRejectionReason(sessionId, suggestion.getId());
+        
+        return new RejectedSuggestionDto(
+            suggestion.getId(),
+            suggestion.getTitle(),
+            suggestion.getDescription(),
+            suggestion.getCategory().getDisplayName(),
+            priceDto,
+            suggestion.getRejectionReasons(),
+            rejectionReason,
+            isCustomReason
         );
     }
     
@@ -270,5 +297,35 @@ public class SuggestionController {
         
         public String getSessionId() { return sessionId; }
         public void setSessionId(String sessionId) { this.sessionId = sessionId; }
+    }
+    
+    public static class RejectedSuggestionDto extends SuggestionDto {
+        private String rejectionReason;
+        private boolean isCustomReason;
+        
+        public RejectedSuggestionDto(String id, String title, String description, String category, 
+                                   PriceBreakdownDto priceBreakdown, List<String> rejectionReasons,
+                                   String rejectionReason, boolean isCustomReason) {
+            super(id, title, description, category, priceBreakdown, rejectionReasons);
+            this.rejectionReason = rejectionReason;
+            this.isCustomReason = isCustomReason;
+        }
+        
+        public String getRejectionReason() { return rejectionReason; }
+        public void setRejectionReason(String rejectionReason) { this.rejectionReason = rejectionReason; }
+        
+        public boolean isCustomReason() { return isCustomReason; }
+        public void setCustomReason(boolean customReason) { isCustomReason = customReason; }
+    }
+    
+    public static class RejectedSuggestionsResponse {
+        private List<RejectedSuggestionDto> suggestions;
+        
+        public RejectedSuggestionsResponse(List<RejectedSuggestionDto> suggestions) {
+            this.suggestions = suggestions;
+        }
+        
+        public List<RejectedSuggestionDto> getSuggestions() { return suggestions; }
+        public void setSuggestions(List<RejectedSuggestionDto> suggestions) { this.suggestions = suggestions; }
     }
 }

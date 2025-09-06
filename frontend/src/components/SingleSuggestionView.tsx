@@ -26,7 +26,7 @@ export function SingleSuggestionView({
   isRegenerating,
   loadingNext,
   suggestionsReviewed,
-  totalSuggestions,
+  totalSuggestions: _totalSuggestions,
   onAcceptSuggestion,
   onRejectSuggestion,
   onStartOver,
